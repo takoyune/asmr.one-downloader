@@ -8,14 +8,14 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
-:: Check if asmr.py exists
-if not exist "C:\ASMR\asmr.py" (
-    echo asmr.py not found in C:\ASMR. Please ensure the script is in the correct directory.
+:: Set working directory to C:\ASMR
+cd /d "%~dp0"
+
+:: Check if asmr.py exists in the same folder as this .bat
+if not exist "asmr.py" (
+    echo asmr.py not found in %~dp0. Please ensure the script is in the same directory as this .bat.
     exit /b 1
 )
-
-:: Set working directory to C:\ASMR
-cd /d C:\ASMR
 
 :: Run asmr.py with provided arguments
 echo Running asmr.py...
