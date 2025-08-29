@@ -1,0 +1,9 @@
+{
+  "output_dir": "C:/ASMR",
+  "default_file_types": [
+    "audio",
+    "image",
+    "text"
+  ],
+  "hq_audio_only": false
+}

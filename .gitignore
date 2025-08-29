@@ -1,0 +1,4 @@
+# Ignore logs and cache
+download_log.txt 
+__pycache__/ 
+*.pyc 
