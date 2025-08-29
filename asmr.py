@@ -20,7 +20,6 @@ CHUNK_SIZE = 8 * 1024 * 1024  # 8 MB chunks
 MAX_CONCURRENT_DOWNLOADS = 3  # Limit concurrent downloads
 CONFIG_FILE = Path("config.json")
 LOG_FILE = Path("download_log.txt")
-RETRY_ATTEMPTS = 3  # Number of retries for failed downloads
 PAUSED = False  # Global pause state
 
 @dataclass
@@ -116,7 +115,7 @@ async def fetch_work_tracks(session: aiohttp.ClientSession, work_id: str, base_d
         data = None
 
     if not data:
-        for attempt in range(RETRY_ATTEMPTS):
+        for attempt in range(3):  # Keep limited retries for API fetch
             try:
                 async with session.get(f"{HOSTNAME}/api/tracks/{work_id}?v=2", timeout=30) as response:
                     response.raise_for_status()
@@ -127,18 +126,18 @@ async def fetch_work_tracks(session: aiohttp.ClientSession, work_id: str, base_d
                     await log_message(f"Successfully fetched tracks from {HOSTNAME} for RJ{work_id}")
                     break
             except aiohttp.ClientError as e:
-                if attempt < RETRY_ATTEMPTS - 1:
-                    print(f"Error fetching tracks for RJ{work_id}: {e}. Retrying ({attempt + 2}/{RETRY_ATTEMPTS})...")
-                    await log_message(f"Error fetching tracks for RJ{work_id}: {e}. Retrying ({attempt + 2}/{RETRY_ATTEMPTS})...")
+                if attempt < 2:
+                    print(f"Error fetching tracks for RJ{work_id}: {e}. Retrying ({attempt + 2}/3)...")
+                    await log_message(f"Error fetching tracks for RJ{work_id}: {e}. Retrying ({attempt + 2}/3)...")
                     await asyncio.sleep(2)
                 else:
-                    print(f"Failed to fetch tracks for RJ{work_id} after {RETRY_ATTEMPTS} attempts: {e}")
-                    await log_message(f"Failed to fetch tracks for RJ{work_id} after {RETRY_ATTEMPTS} attempts: {e}")
+                    print(f"Failed to fetch tracks for RJ{work_id} after 3 attempts: {e}")
+                    await log_message(f"Failed to fetch tracks for RJ{work_id} after 3 attempts: {e}")
                     return []
     return transform_work_data(data, base_dir / f"RJ{work_id}")
 
 async def fetch_work_metadata(session: aiohttp.ClientSession, work_id: str) -> dict:
-    for attempt in range(RETRY_ATTEMPTS):
+    for attempt in range(3):
         try:
             async with session.get(f"{HOSTNAME}/api/workInfo/{work_id}", timeout=30) as response:
                 response.raise_for_status()
@@ -147,13 +146,13 @@ async def fetch_work_metadata(session: aiohttp.ClientSession, work_id: str) -> d
                 await log_message(f"Successfully fetched metadata from {HOSTNAME} for RJ{work_id}")
                 return data
         except aiohttp.ClientError as e:
-            if attempt < RETRY_ATTEMPTS - 1:
-                print(f"Error fetching metadata for RJ{work_id}: {e}. Retrying ({attempt + 2}/{RETRY_ATTEMPTS})...")
-                await log_message(f"Error fetching metadata for RJ{work_id}: {e}. Retrying ({attempt + 2}/{RETRY_ATTEMPTS})...")
+            if attempt < 2:
+                print(f"Error fetching metadata for RJ{work_id}: {e}. Retrying ({attempt + 2}/3)...")
+                await log_message(f"Error fetching metadata for RJ{work_id}: {e}. Retrying ({attempt + 2}/3)...")
                 await asyncio.sleep(2)
             else:
-                print(f"Failed to fetch metadata for RJ{work_id} after {RETRY_ATTEMPTS} attempts: {e}")
-                await log_message(f"Failed to fetch metadata for RJ{work_id} after {RETRY_ATTEMPTS} attempts: {e}")
+                print(f"Failed to fetch metadata for RJ{work_id} after 3 attempts: {e}")
+                await log_message(f"Failed to fetch metadata for RJ{work_id} after 3 attempts: {e}")
                 return {}
     return {}
 
@@ -197,7 +196,7 @@ async def download_track(session: aiohttp.ClientSession, track: WorkTrack, track
     file_desc = track.filename[:30] + "..." if len(track.filename) > 30 else track.filename
     total_mb = total_size / 1024 / 1024 if total_size else None
 
-    for attempt in range(RETRY_ATTEMPTS):
+    for attempt in range(3):  # Keep limited retries for individual download attempts
         try:
             msg = f"Starting download: {track.filename} ({track_index+1}/{MAX_CONCURRENT_DOWNLOADS})"
             print(msg)
@@ -212,7 +211,7 @@ async def download_track(session: aiohttp.ClientSession, track: WorkTrack, track
                 async with session.get(track.url, headers=headers, timeout=60) as response:
                     response.raise_for_status()
                     total_size = int(response.headers.get("content-length", track.size or 0)) + existing_size
-                    pbar.total = total_size  # Update total size in progress bar
+                    pbar.total = total_size
                     mode = "ab" if existing_size else "wb"
                     async with aiofiles.open(track.save_path, mode) as fp:
                         async for chunk in response.content.iter_chunked(CHUNK_SIZE):
@@ -226,26 +225,26 @@ async def download_track(session: aiohttp.ClientSession, track: WorkTrack, track
             await log_message(f"Completed download: {track.filename}")
             return True, downloaded_bytes / 1024 / 1024
         except aiohttp.ClientResponseError as e:
-            if attempt < RETRY_ATTEMPTS - 1:
+            if attempt < 2:
                 track.status = "Retrying"
-                print(f"Error downloading {track.filename}: HTTP {e.status}, {e.message}. Retrying ({attempt + 2}/{RETRY_ATTEMPTS})...")
-                await log_message(f"Error downloading {track.filename}: HTTP {e.status}, {e.message}. Retrying ({attempt + 2}/{RETRY_ATTEMPTS})...")
+                print(f"Error downloading {track.filename}: HTTP {e.status}, {e.message}. Retrying ({attempt + 2}/3)...")
+                await log_message(f"Error downloading {track.filename}: HTTP {e.status}, {e.message}. Retrying ({attempt + 2}/3)...")
                 await asyncio.sleep(2)
             else:
                 track.status = "Error"
-                print(f"Failed to download {track.filename} after {RETRY_ATTEMPTS} attempts: HTTP {e.status}, {e.message}")
-                await log_message(f"Failed to download {track.filename} after {RETRY_ATTEMPTS} attempts: HTTP {e.status}, {e.message}")
+                print(f"Failed to download {track.filename} after 3 attempts: HTTP {e.status}, {e.message}")
+                await log_message(f"Failed to download {track.filename} after 3 attempts: HTTP {e.status}, {e.message}")
                 return False, 0
         except Exception as e:
-            if attempt < RETRY_ATTEMPTS - 1:
+            if attempt < 2:
                 track.status = "Retrying"
-                print(f"Unexpected error downloading {track.filename}: {e}. Retrying ({attempt + 2}/{RETRY_ATTEMPTS})...")
-                await log_message(f"Unexpected error downloading {track.filename}: {e}. Retrying ({attempt + 2}/{RETRY_ATTEMPTS})...")
+                print(f"Unexpected error downloading {track.filename}: {e}. Retrying ({attempt + 2}/3)...")
+                await log_message(f"Unexpected error downloading {track.filename}: {e}. Retrying ({attempt + 2}/3)...")
                 await asyncio.sleep(2)
             else:
                 track.status = "Error"
-                print(f"Failed to download {track.filename} after {RETRY_ATTEMPTS} attempts: {e}")
-                await log_message(f"Failed to download {track.filename} after {RETRY_ATTEMPTS} attempts: {e}")
+                print(f"Failed to download {track.filename} after 3 attempts: {e}")
+                await log_message(f"Failed to download {track.filename} after 3 attempts: {e}")
                 return False, 0
     track.status = "Error"
     return False, 0
@@ -255,7 +254,7 @@ async def check_file_integrity(track: WorkTrack) -> bool:
 
 async def monitor_pause_resume():
     global PAUSED
-    PAUSED = False  # Reset PAUSED at start
+    PAUSED = False
     while True:
         try:
             if keyboard.is_pressed('p'):
@@ -379,7 +378,6 @@ async def process_work(work_id: str, base_dir: Path, config: dict) -> tuple[int,
     start_time = datetime.now()
     downloaded_files = 0
     total_size_downloaded = 0
-    max_retries = 3  # Max retry attempts for failed files
     async with create_session() as session:
         print(f"\n=== Processing RJ{work_id} ===")
         await log_message(f"Processing RJ{work_id}")
@@ -410,9 +408,9 @@ async def process_work(work_id: str, base_dir: Path, config: dict) -> tuple[int,
                 return 0, 0, 0
 
             retry_count = 0
-            while selected_tracks and retry_count < max_retries:
-                print(f"\nStarting download for {len(selected_tracks)} files (Attempt {retry_count + 1}/{max_retries}, Press 'p' to pause, 'r' to resume):")
-                await log_message(f"Starting download for {len(selected_tracks)} files for RJ{work_id} (Attempt {retry_count + 1}/{max_retries})")
+            while selected_tracks:  # Retry until all files are downloaded
+                print(f"\nStarting download for {len(selected_tracks)} files (Attempt {retry_count + 1}, Press 'p' to pause, 'r' to resume):")
+                await log_message(f"Starting download for {len(selected_tracks)} files for RJ{work_id} (Attempt {retry_count + 1})")
                 asyncio.create_task(monitor_pause_resume())
                 semaphore = asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS)
                 async def limited_download(track, index):
@@ -440,14 +438,9 @@ async def process_work(work_id: str, base_dir: Path, config: dict) -> tuple[int,
                 
                 selected_tracks = retry_tracks
                 retry_count += 1
-                if selected_tracks and retry_count < max_retries:
+                if selected_tracks:
                     print(f"\nRetrying {len(selected_tracks)} failed files...")
                     await log_message(f"Retrying {len(selected_tracks)} failed files for RJ{work_id}")
-                elif selected_tracks:
-                    print(f"\nFailed to download {len(selected_tracks)} files after {max_retries} attempts:")
-                    for track in selected_tracks:
-                        print(f"- {track.filename} ({track.type}, {track.size / 1024 / 1024:.2f} MB)")
-                    await log_message(f"Failed to download {len(selected_tracks)} files for RJ{work_id} after {max_retries} attempts")
 
             # Final verification of downloaded files
             verified_downloaded = 0
