@@ -1,0 +1,5 @@
+aiohttp>=3.10.0
+aiofiles>=23.2.0
+rich>=13.7.0
+mutagen>=1.47.0
+keyboard>=0.13.5
