@@ -1,9 +1,13 @@
 {
-  "output_dir": "C:/ASMR",
+  "output_dir": "Downloads",
+  "max_concurrent": 3,
+  "proxy": "",
+  "tag_audio": true,
   "default_file_types": [
     "audio",
     "image",
-    "text"
+    "text",
+    "folder"
   ],
   "hq_audio_only": false
 }
