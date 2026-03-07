@@ -1,0 +1,11 @@
+{
+    "output_dir": "Downloads",
+    "max_concurrent": 3,
+    "proxy": "",
+    "mirror": "https://api.asmr-200.com",
+    "tag_audio": true,
+    "sort_files": false,
+    "dir_template": "RJ{rj_id} {title}",
+    "auth_token": "",
+    "timeout": 60
+}

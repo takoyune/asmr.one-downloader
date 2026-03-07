@@ -1,0 +1,7 @@
+customtkinter
+pillow
+aiohttp
+aiofiles
+mutagen
+requests
+packaging
