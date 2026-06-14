@@ -1,4 +1,5 @@
-# 🎙️ ASMR.ONE DOWNLOADER
+# 🎙️ ASMR.ONE DOWNLOADER v1.1.0
+
 
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -11,6 +12,8 @@ A high-performance, asynchronous CLI tool designed for downloading and organizin
 ## ✨ Key Features
 
 *   **⚡ Ultra-Fast Asynchronous Downloads**: Powered by `asyncio` and `aiohttp` for high-concurrency file transfers.
+*   **🌐 Custom DNS Support**: Configure a custom DNS (like `1.1.1.1`) directly in `config.json` to bypass ISP tracking and routing issues.
+*   **🐛 Robust URL Handling**: Advanced `yarl` overrides to properly support and download tracks containing special characters like `&`.
 *   **📊 Dynamic Progress Visualization**: Real-time tracking of individual files with a sleek, multi-bar progress interface.
 *   **📂 Batch Processing**: Queuing multiple RJ codes via the terminal or by loading a list from a local `.txt` file.
 *   **🎵 Intelligent Metadata Tagging**: Automatically applies high-quality metadata (Title, Artist, Album, Cover Art) to MP3, FLAC, and OGG files using `mutagen`.
@@ -56,6 +59,15 @@ python main.py
 2.  **Download**: Enter RJ codes (e.g., `RJ123456`) separated by spaces.
 3.  **Batch Load**: Select option `[2]` and point the app to a `.txt` file containing your list of codes.
 4.  **Utilities**: Use option `[6]` to clear cache or run system diagnostics.
+
+### ⚙️ Custom DNS Configuration
+If you face timeout issues or ISP blocks, you can configure the downloader to tunnel API requests through a custom DNS (e.g., Cloudflare's `1.1.1.1`). 
+Simply open `config.json` and adjust the `"dns"` property:
+```json
+{
+    "dns": "1.1.1.1"
+}
+```
 
 ---
 
