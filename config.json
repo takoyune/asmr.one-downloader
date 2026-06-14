@@ -7,5 +7,6 @@
     "sort_files": false,
     "dir_template": "RJ{rj_id} {title}",
     "auth_token": "",
-    "timeout": 60
+    "timeout": 60,
+    "dns": "1.1.1.1"
 }

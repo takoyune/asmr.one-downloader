@@ -1,4 +1,5 @@
 import asyncio
+import urllib.parse
 import textwrap
 import wave
 import rich
@@ -34,7 +35,7 @@ def system_preflight_check() -> None:
     Scans the runtime environment for critical dependencies.
     Auto-injects missing modules via pip and reboots the kernel.
     """
-    required_packages = ['aiofiles', 'aiohttp', 'rich', 'mutagen']
+    required_packages = ['aiofiles', 'aiohttp', 'rich', 'mutagen', 'aiodns']
     missing = []
 
     for package in required_packages:
@@ -206,6 +207,7 @@ class ConfigManager:
         self.dir_template = "RJ{rj_id} {title}"
         self.auth_token = None
         self.timeout = 60
+        self.dns = "1.1.1.1"
 
     @classmethod
     def load(cls) -> 'ConfigManager':
@@ -225,6 +227,7 @@ class ConfigManager:
                     config.dir_template = data.get('dir_template', "RJ{rj_id} {title}")
                     config.auth_token = data.get('auth_token')
                     config.timeout = int(data.get('timeout', 60))
+                    config.dns = data.get('dns', '1.1.1.1')
                     
             except (json.JSONDecodeError, KeyError, ValueError) as e:
                 logging.warning(f"Config load error: {e}, using defaults")
@@ -241,7 +244,8 @@ class ConfigManager:
             "sort_files": self.sort_files,
             "dir_template": self.dir_template,
             "auth_token": self.auth_token,
-            "timeout": self.timeout
+            "timeout": self.timeout,
+            "dns": self.dns
         }
         try:
             with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
@@ -338,9 +342,17 @@ class NetworkKernel:
                 connect=self.config.timeout, 
                 sock_read=self.config.timeout
             )
+            
+            connector = None
+            if getattr(self.config, 'dns', None):
+                import aiohttp.resolver
+                resolver = aiohttp.resolver.AsyncResolver(nameservers=[self.config.dns])
+                connector = aiohttp.TCPConnector(resolver=resolver)
+                
             self.session = aiohttp.ClientSession(
                 headers=headers, 
-                timeout=timeout
+                timeout=timeout,
+                connector=connector
             )
 
     async def shutdown(self) -> None:
@@ -562,11 +574,17 @@ class Orchestrator:
                 else:
                     save_path = root_path / title
                 
+                import yarl
+                raw_url = node["mediaDownloadUrl"]
+                parsed_url = urllib.parse.urlsplit(raw_url)
+                safe_path = urllib.parse.quote(urllib.parse.unquote(parsed_url.path))
+                fixed_url = urllib.parse.urlunsplit((parsed_url.scheme, parsed_url.netloc, safe_path, parsed_url.query, parsed_url.fragment))
+                
                 track = TrackItem(
                     id=node.get("id", ""),
                     title=title,
                     type=node.get("type", "file"),
-                    url=node["mediaDownloadUrl"],
+                    url=yarl.URL(fixed_url, encoded=True),
                     size=node.get("size", 0),
                     save_path=save_path,
                     level=level
@@ -622,7 +640,9 @@ class Orchestrator:
                         if resp.status not in [200, 206]:
                             if attempt == 2:
                                 self.stats.failed += 1
-                                self.log_ui(f"[red]Failed: {track.title} (HTTP {resp.status})[/red]")
+                                msg = f"Failed: {track.title} (HTTP {resp.status}) - URL: {track.url}"
+                                self.log_ui(f"[red]{msg}[/red]")
+                                logging.error(msg)
                             continue
                         
                         mode = "ab" if resp.status == 206 else "wb"
@@ -643,7 +663,9 @@ class Orchestrator:
             except Exception as e:
                 if attempt == 2:
                     self.stats.failed += 1
-                    self.log_ui(f"[red]Error downloading {track.title}: {e}[/red]")
+                    msg = f"Error downloading {track.title}: {e} - URL: {track.url}"
+                    self.log_ui(f"[red]{msg}[/red]")
+                    logging.error(msg)
                     prog.remove_task(file_task)
                 await asyncio.sleep(1)
 
@@ -877,7 +899,13 @@ class Mainframe:
         return selected
     
 
-    
+    async def _run_job_safe(self, rj_id: str) -> None:
+        """Helper to run a job and safely cleanup the event loop resources."""
+        try:
+            await self.execute_job(rj_id)
+        finally:
+            await self.kernel.shutdown()
+
     async def execute_job(self, rj_id: str) -> None:
         """Execute a download job for a specific RJ code."""
         self.orc.log_ui(f"Fetching metadata for RJ{rj_id}...")
@@ -1000,6 +1028,7 @@ class Mainframe:
             ]
             await asyncio.gather(*coros)
             
+            await asyncio.sleep(1.0)
             update_task.cancel()
         
         final_size = sum(
@@ -1079,7 +1108,7 @@ class Mainframe:
                 
                 for rj in self.queue:
                     try:
-                        asyncio.run(self.execute_job(rj))
+                        asyncio.run(self._run_job_safe(rj))
                     except Exception as e:
                         console.print(f"[red]Error processing RJ{rj}: {e}[/red]")
                         logging.error(f"Error processing RJ{rj}: {e}")
@@ -1114,7 +1143,7 @@ class Mainframe:
                     
                     for rj in self.queue:
                         try:
-                            asyncio.run(self.execute_job(rj))
+                            asyncio.run(self._run_job_safe(rj))
                         except Exception as e:
                             console.print(f"[red]Error processing RJ{rj}: {e}[/red]")
                             logging.error(f"Error processing RJ{rj}: {e}")

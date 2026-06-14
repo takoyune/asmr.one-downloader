@@ -5,3 +5,5 @@ aiofiles
 mutagen
 requests
 packaging
+rich
+aiodns
