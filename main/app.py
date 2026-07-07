@@ -880,15 +880,26 @@ Timeout: {self.config.timeout}s
                 table.add_column("Mirror")
                 table.add_column("Latency", justify="right")
                 table.add_column("Status")
+                table.add_column("Global (UptimeRobot)", justify="center")
                 
-                for mirror, latency, err in results:
+                for mirror, latency, err, global_status in results:
                     if latency != float('inf'):
                         ms = f"{latency*1000:.0f} ms"
                         status = "[green]Online[/green]"
                     else:
                         ms = "Error"
                         status = f"[red]{err}[/red]"
-                    table.add_row(mirror, ms, status)
+                    
+                    g_status = "-"
+                    if global_status:
+                        if "UP" in global_status:
+                            g_status = f"[green]{global_status}[/green]"
+                        elif "DOWN" in global_status:
+                            g_status = f"[red]{global_status}[/red]"
+                        else:
+                            g_status = global_status
+
+                    table.add_row(mirror, ms, status, g_status)
                 console.print(table)
                 Prompt.ask("\n[dim]Press Enter to continue...[/dim]")
             elif choice == "b":
