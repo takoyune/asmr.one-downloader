@@ -4,7 +4,6 @@
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)](#)
-[![Launcher](https://img.shields.io/badge/run%20with-./asmr-success.svg)](#)
 
 An asynchronous, terminal-based downloader for [ASMR.ONE](https://asmr.one). Downloads are persistent, resumable, bandwidth-throttled, and organized into a local SQLite library. Works from an interactive menu or entirely from the command line.
 
@@ -18,8 +17,7 @@ An asynchronous, terminal-based downloader for [ASMR.ONE](https://asmr.one). Dow
 |:---:|:---:|:---:|
 | [✨ Features](#-features) | [📦 Requirements](#-requirements) | [🚀 Installation](#-installation) |
 | [▶️ Running the App](#️-running-the-app) | [🖥️ Interactive Menu](#️-usage--interactive-menu) | [🔧 CLI Flags](#-usage--cli-flags) |
-| [⚙️ Configuration](#️-configuration) | [📁 Project Structure](#-project-structure) | [🔍 Troubleshooting](#-troubleshooting) |
-| [🗺️ Roadmap](#️-roadmap) | [📝 License](#-license) | |
+| [⚙️ Configuration](#️-configuration) | [📁 Project Structure](#-project-structure) | [🔍 Troubleshooting](#-troubleshooting) | [📝 License](#-license) | |
 
 </div>
 
@@ -381,19 +379,6 @@ Check `singularity.log` for the full traceback. The log file is in the project r
 ### Files are not being tagged after download
 Ensure `tag_audio` is `true` in `config.json`. Tagging only applies to MP3, FLAC, and OGG files. WAV files are not tagged (the WAV format has no standard metadata container).
 
----
-
-
-## 🗺️ Roadmap
-
-Planned features, roughly in priority order:
-
-- [ ] **Mirror fallback during active downloads** — if the current mirror drops mid-session, retry the request on the next available mirror automatically
-- [ ] **Export library to CSV/JSON** — `./asmr --export library.csv` for spreadsheet or external management
-- [ ] **Watchlist / subscription mode** — auto-queue new releases from followed circles or voice actresses
-- [ ] **Checksum-based resume validation** — verify file integrity after resume using checksums, not just size comparison
-- [ ] **Optional audio conversion** — post-download FLAC → MP3 conversion via `ffmpeg` (only if `ffmpeg` is available in PATH)
-- [ ] **Persistent achievements** — the current achievement tracker resets on every run; a proper DB-backed version is planned
 
 ---
 
