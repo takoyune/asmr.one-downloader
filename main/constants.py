@@ -1,0 +1,71 @@
+import re
+import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+from rich.console import Console
+from rich.theme import Theme
+
+APP_VERSION = "v1.2.07072026"
+GITHUB_REPO = "takoyune/asmr.one-downloader"
+
+APP_NAME = "ASMR.ONE DOWNLOADER"
+RJ_PATTERN = re.compile(r"(?:RJ)?(?P<id>[\d]{6,})")
+CHUNK_SIZE = 1048576  # 1MB chunks for smoother throttling and progress
+CONFIG_FILE = Path("config.json")
+DB_FILE = Path("history.db")
+LOG_FILE = Path("singularity.log")
+
+TKINTER_AVAILABLE = False
+try:
+    import tkinter as tk
+    from tkinter import filedialog, Tk
+    TKINTER_AVAILABLE = True
+except ImportError:
+    TKINTER_AVAILABLE = False
+
+HOSTNAME_MIRRORS = [
+    "https://api.asmr-200.com",
+    "https://api.asmr.one",
+    "https://api.asmr-100.com",
+    "https://api.asmr-300.com"
+]
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+]
+
+# Configure logging with RotatingFileHandler (max 5MB, keep 3 backups)
+log_handler = RotatingFileHandler(
+    LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3
+)
+log_formatter = logging.Formatter(
+    fmt='%(asctime)s | %(levelname)s | [%(name)s] %(message)s', 
+    datefmt='%H:%M:%S'
+)
+log_handler.setFormatter(log_formatter)
+
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+# Remove existing handlers if any (useful during hot reloads or multiple imports)
+for h in root_logger.handlers[:]:
+    root_logger.removeHandler(h)
+root_logger.addHandler(log_handler)
+
+# Create console with theme
+theme = Theme({
+    "info": "cyan",
+    "warning": "yellow",
+    "error": "bold red",
+    "success": "bold green",
+    "dim": "dim white",
+    "hack": "bright_green",
+    "matrix": "bright_green",
+    "glitch": "bright_magenta",
+    "cyber": "bright_cyan",
+    "neon": "bright_yellow",
+    "gold": "rgb(255,215,0)"
+})
+console = Console(theme=theme)
