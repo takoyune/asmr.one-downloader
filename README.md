@@ -281,8 +281,6 @@ usage: ./asmr [-h] [-b FILE] [-a] [--list] [--export FILE] [--test]
 
 `config.json` is created automatically on first launch in the project root. You can edit it directly or change values through **Settings** in the interactive menu.
 
-> ⚠️ **Security note:** `config.json` is stored in plaintext. Do not commit it to version control, especially if you configure a proxy. Add `config.json` to your `.gitignore`.
-
 ```json
 {
     "output_dir": "Downloads",
