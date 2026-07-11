@@ -73,6 +73,10 @@ def main() -> None:
         app.auto_all = args.all
         app.dry_run = args.dry_run
         
+        if getattr(app.config, 'dns', None) == "auto":
+            fastest_dns = asyncio.run(NetworkDiagnostics.scan_best_dns(app.config.proxy))
+            app.config.dns = fastest_dns or ""
+        
         if args.list:
             if not args.rj_codes:
                 console.print("[red]Please provide RJ codes to list (e.g., ./asmr --list RJ123456)[/red]")

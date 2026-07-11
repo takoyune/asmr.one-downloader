@@ -6,7 +6,15 @@
     "tag_audio": true,
     "sort_files": false,
     "dir_template": "RJ{rj_id} {title}",
-    "auth_token": "",
     "timeout": 60,
-    "dns": "1.1.1.1"
+    "dns": "1.1.1.1",
+    "bandwidth_limit_mbps": 0.0,
+    "format_priority": [
+        "wav",
+        "flac",
+        "mp3",
+        "m4a",
+        "ogg"
+    ],
+    "last_update_check": 0.0
 }

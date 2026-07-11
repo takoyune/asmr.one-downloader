@@ -1,4 +1,6 @@
 import time
+import json
+import urllib.request
 import random
 import asyncio
 import logging
@@ -37,9 +39,22 @@ class NetworkKernel:
                 from aiohttp_socks import ProxyConnector
                 connector = ProxyConnector.from_url(self.config.proxy)
             elif getattr(self.config, 'dns', None):
-                from aiohttp.resolver import AsyncResolver
-                resolver = AsyncResolver(nameservers=[self.config.dns])
-                connector = aiohttp.TCPConnector(resolver=resolver)
+                dns_ip = self.config.dns
+                if dns_ip.lower() == "auto":
+                    fastest_dns = await NetworkDiagnostics.scan_best_dns(self.config.proxy)
+                    if fastest_dns:
+                        dns_ip = fastest_dns
+                        self.config.dns = fastest_dns # Save it for the session
+                    else:
+                        dns_ip = None # fallback to threaded resolver if scan fails
+                        
+                if dns_ip and dns_ip.lower() != "auto":
+                    from aiohttp.resolver import AsyncResolver
+                    resolver = AsyncResolver(nameservers=[dns_ip])
+                    connector = aiohttp.TCPConnector(resolver=resolver)
+                else:
+                    from aiohttp.resolver import ThreadedResolver
+                    connector = aiohttp.TCPConnector(resolver=ThreadedResolver())
             else:
                 # Always use ThreadedResolver (system DNS via socket API).
                 # This is critical on Windows with VPNs: aiodns (the aiohttp
@@ -95,14 +110,18 @@ class NetworkKernel:
                 return None
         return None
 
-    async def stream(self, url: str, headers: dict = None) -> aiohttp.ClientResponse:
+    async def stream(self, url, headers: dict = None) -> aiohttp.ClientResponse:
         """Stream a file download."""
         await self.boot()
         proxy = self.config.proxy if self.config.proxy and not self.config.proxy.startswith("socks") else None
         
-        url_str = str(url)
         import yarl
-        cdn_url = yarl.URL(url_str)
+        if isinstance(url, yarl.URL):
+            cdn_url = url
+            url_str = str(url)
+        else:
+            url_str = str(url)
+            cdn_url = yarl.URL(url_str)
         
         # If the URL points to the CDN (not the API mirror), download directly.
         # The mirror-rotation logic is only for API endpoints; CDN hostnames are
@@ -142,8 +161,63 @@ class NetworkKernel:
 
 
 class NetworkDiagnostics:
-    """Handles network diagnostics and mirror rotation."""
-    
+    """Handles network diagnostic tests like latency and uptimerobot checks."""
+
+    @staticmethod
+    async def scan_best_dns(proxy: Optional[str] = None) -> Optional[str]:
+        """Fetch Japanese public DNS servers and test for the fastest one."""
+        console.print("[cyan]Fetching public Japan DNS list...[/cyan]")
+        url = "https://public-dns.info/nameserver/jp.json"
+        
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            loop = asyncio.get_event_loop()
+            def fetch():
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    return json.loads(r.read().decode("utf-8"))
+            data = await loop.run_in_executor(None, fetch)
+        except Exception as e:
+            console.print(f"[red]Failed to fetch DNS list: {e}[/red]")
+            return None
+
+        # Filter for high reliability and take a random sample of 30 to test
+        reliable = [d["ip"] for d in data if d.get("reliability", 0) >= 0.9]
+        if not reliable:
+            return None
+            
+        candidates = random.sample(reliable, min(30, len(reliable)))
+        console.print(f"[cyan]Testing {len(candidates)} reliable DNS servers...[/cyan]")
+        
+        async def ping_dns(ip: str) -> Tuple[str, float]:
+            start = time.time()
+            try:
+                from aiohttp.resolver import AsyncResolver
+                resolver = AsyncResolver(nameservers=[ip])
+                connector = aiohttp.TCPConnector(resolver=resolver)
+                
+                async with aiohttp.ClientSession(connector=connector) as session:
+                    p = proxy if proxy and not proxy.startswith("socks") else None
+                    # We just need to check if it resolves and connects quickly
+                    # using the fastest API mirror endpoint (asmr-200.com)
+                    async with session.head("https://api.asmr-200.com/api/tracks/01568205", proxy=p, timeout=5) as resp:
+                        resp.raise_for_status()
+                        return ip, time.time() - start
+            except Exception:
+                return ip, float('inf')
+
+        results = await asyncio.gather(*[ping_dns(ip) for ip in candidates])
+        valid = [(ip, t) for ip, t in results if t != float('inf')]
+        
+        if not valid:
+            console.print("[red]All scanned DNS servers failed.[/red]")
+            return None
+            
+        valid.sort(key=lambda x: x[1])
+        fastest_ip = valid[0][0]
+        console.print(f"[green]Selected fastest DNS: {fastest_ip} ({valid[0][1]*1000:.0f}ms)[/green]")
+        await asyncio.sleep(0.250)  # Allow aiohttp to clean up pycares tasks
+        return fastest_ip
+
     @staticmethod
     async def test_mirrors(proxy: Optional[str], dns: Optional[str] = None) -> Optional[str]:
         """Test all mirrors concurrently and return the fastest one."""
@@ -154,6 +228,7 @@ class NetworkDiagnostics:
             return None
         fastest = valid[0]
         console.print(f"[green]Selected fastest mirror: {fastest[0]} ({fastest[1]*1000:.0f}ms)[/green]")
+        await asyncio.sleep(0.250)
         return fastest[0]
 
     @staticmethod
@@ -213,7 +288,7 @@ class NetworkDiagnostics:
         if proxy and proxy.startswith("socks"):
             from aiohttp_socks import ProxyConnector
             connector = ProxyConnector.from_url(proxy)
-        elif dns:
+        elif dns and dns.lower() != "auto":
             from aiohttp.resolver import AsyncResolver
             resolver = AsyncResolver(nameservers=[dns])
             connector = aiohttp.TCPConnector(resolver=resolver)

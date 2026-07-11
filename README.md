@@ -354,11 +354,16 @@ asmr.one-downloader/
 
 ## 🔍 Troubleshooting
 
-### "All API mirrors are unreachable"
-The startup mirror test failed for all mirrors. Check:
-1. Your internet connection
-2. Whether your ISP blocks the ASMR.ONE domains — try setting `dns` to `"1.1.1.1"` or `"8.8.8.8"` in `config.json`
-3. If you need a proxy, set the `proxy` field in `config.json`
+### "All API mirrors are unreachable" or Connection Errors
+**ASMR.ONE is actively region-blocked outside of East Asia (Japan, China, etc.).** 
+If the startup mirror test fails or you cannot connect, your connection is likely being blocked. We highly recommend using **Cloudflare WARP** to bypass this:
+
+1. Download and install Cloudflare WARP from [https://one.one.one.one/](https://one.one.one.one/)
+2. Open the WARP app settings (click the gear icon).
+3. Make sure to choose **Traffic and DNS (UDP)** (do *not* just choose the 1.1.1.1 DNS option).
+4. Turn on the connection switch and restart the downloader.
+
+Alternatively, if you have your own proxy, you can set the `proxy` field in `config.json` (e.g. `"http://user:pass@ip:port"`).
 
 ### Downloads hang or time out repeatedly
 - Increase `timeout` in `config.json` (e.g. `120`)

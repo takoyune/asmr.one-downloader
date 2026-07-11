@@ -137,15 +137,12 @@ class Orchestrator:
                 
                 import yarl
                 raw_url = node["mediaDownloadUrl"]
-                parsed_url = urllib.parse.urlsplit(raw_url)
-                safe_path = urllib.parse.quote(urllib.parse.unquote(parsed_url.path))
-                fixed_url = urllib.parse.urlunsplit((parsed_url.scheme, parsed_url.netloc, safe_path, parsed_url.query, parsed_url.fragment))
                 
                 track = TrackItem(
                     id=node.get("id", ""),
                     title=title,
                     type=node.get("type", "file"),
-                    url=yarl.URL(fixed_url, encoded=True),
+                    url=yarl.URL(raw_url, encoded=True),
                     size=node.get("size", 0),
                     save_path=save_path,
                     level=level
@@ -206,7 +203,7 @@ class Orchestrator:
             prog.remove_task(file_task)
             return
 
-        for attempt in range(3):
+        for attempt in range(20):
             try:
                 db_state = self.db.file_state_get(meta.rj_id, str(path))
                 if db_state and db_state['status'] == 'completed' and path.exists():
@@ -247,7 +244,7 @@ class Orchestrator:
                             raise Exception("HTTP 416 Range Not Satisfiable")
                             
                         if resp.status not in [200, 206]:
-                            if attempt == 2:
+                            if attempt == 19:
                                 self.stats.failed += 1
                                 reason = f"HTTP {resp.status}"
                                 self.stats.failures.append((track.title, reason))
@@ -289,8 +286,8 @@ class Orchestrator:
                 return
                 
             except Exception as e:
-                logging.warning(f"Attempt {attempt+1}/3 failed for {track.title}: {e}")
-                if attempt == 2:
+                logging.warning(f"Attempt {attempt+1}/20 failed for {track.title}: {e}")
+                if attempt == 19:
                     self.stats.failed += 1
                     reason = f"{type(e).__name__}: {e}"
                     self.stats.failures.append((track.title, reason))

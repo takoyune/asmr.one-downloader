@@ -250,7 +250,7 @@ class Mainframe:
                         self.clear()
                         self.draw_header()
                         console.print(f"[cyan]Found {len(saved_targets)} previously selected files for RJ{rj_id}.[/cyan]")
-                        choice = Prompt.ask("Resume previous selection? (Press 'n' to change selection)", choices=["y", "n"], default="y").lower()
+                        choice = Prompt.ask("Resume previous selection? (Press 'n' to change selection)", choices=["y", "n", "Y", "N"], default="y").lower()
                         if choice == 'y':
                             targets = saved_targets
             except Exception:
