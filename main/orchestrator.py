@@ -8,9 +8,10 @@ import logging
 import aiofiles
 from pathlib import Path
 from datetime import datetime
-from typing import List
+from typing import List, Any
 
 from rich.progress import Progress, TaskID
+from main.progress import ProgressReporter
 
 from main.constants import CHUNK_SIZE
 from main.models import WorkMetadata, TrackItem, SessionStats
@@ -181,7 +182,7 @@ class Orchestrator:
         return items
 
     async def download_file(self, track: TrackItem, meta: WorkMetadata, 
-                           prog: Progress, main_task: TaskID, cover: Path) -> None:
+                           prog: ProgressReporter, main_task: Any, cover: Path) -> None:
         """Download a single file with individual progress tracking."""
         path = track.save_path
         logging.debug(f"[RJ{meta.rj_id}] Starting download loop for {track.title} -> {path}")
@@ -212,7 +213,7 @@ class Orchestrator:
                     if attempt == 0:
                         self.stats.skipped += 1
                         logging.debug(f"[RJ{meta.rj_id}] File {track.title} already completed in DB and exists on disk. Skipping.")
-                    prog.update(main_task, advance=track.size)
+                    prog.update_task(main_task, advance=track.size)
                     prog.remove_task(file_task)
                     return
 
@@ -220,7 +221,7 @@ class Orchestrator:
                 if path.exists() and path.stat().st_size == track.size:
                     if attempt == 0:
                         self.stats.skipped += 1
-                    prog.update(main_task, advance=track.size)
+                    prog.update_task(main_task, advance=track.size)
                     prog.remove_task(file_task)
                     return
 
@@ -260,8 +261,8 @@ class Orchestrator:
                             async for chunk in resp.content.iter_chunked(CHUNK_SIZE):
                                 await self._consume_bandwidth(len(chunk))
                                 await f.write(chunk)
-                                prog.update(main_task, advance=len(chunk))
-                                prog.update(file_task, advance=len(chunk))
+                                prog.update_task(main_task, advance=len(chunk))
+                                prog.update_task(file_task, advance=len(chunk))
                                 self.stats.bytes_downloaded += len(chunk)
                 
                 # Verify download completed successfully

@@ -10,7 +10,7 @@ from main.models import WorkMetadata
 class LibraryVault:
     """Manages download history and library database."""
     def __init__(self):
-        self.conn = sqlite3.connect(DB_FILE)
+        self.conn = sqlite3.connect(DB_FILE, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self._init_schema()
 
@@ -56,6 +56,11 @@ class LibraryVault:
             except sqlite3.OperationalError:
                 pass  # Column already exists
 
+            try:
+                self.conn.execute("ALTER TABLE works ADD COLUMN cover_url TEXT DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
     def close(self) -> None:
         """Close the database connection."""
         if self.conn:
@@ -66,9 +71,9 @@ class LibraryVault:
         with self.conn:
             self.conn.execute(
                 """INSERT OR REPLACE INTO works 
-                   (rj_id, title, circle, downloaded_at, size_bytes, local_path) 
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (meta.rj_id, meta.title, meta.circle, datetime.now(), size, str(path))
+                   (rj_id, title, circle, downloaded_at, size_bytes, local_path, cover_url) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (meta.rj_id, meta.title, meta.circle, datetime.now(), size, str(path), getattr(meta, 'cover_url', ''))
             )
         self._summary_cache_time = 0  # invalidate cache so draw_header() reflects new work
 

@@ -14,34 +14,7 @@ if sys.platform == 'win32':
 
 from main.constants import *
 
-# ============================================================================
-# SYSTEM PREFLIGHT CHECK
-# ============================================================================
-def system_preflight_check() -> None:
-    """
-    Scans the runtime environment for critical dependencies.
-    Auto-injects missing modules via pip and reboots the kernel.
-    """
-    required_packages = ['aiofiles', 'aiohttp', 'rich', 'mutagen', 'aiodns', 'pydantic', 'aiohttp_socks']
-    missing = []
 
-    for package in required_packages:
-        if importlib.util.find_spec(package) is None:
-            missing.append(package)
-
-    if not missing:
-        return
-
-    # Fallback raw print for pre-rich environment
-    print("\n\033[91m[FATAL] Missing Core Modules Detected.\033[0m")
-    print(f"Missing dependencies: {', '.join(missing)}")
-    print("Please install them manually by running:")
-    print("    pip install " + " ".join(missing))
-    print("Or install via requirements.txt if available.")
-    sys.exit(1)
-
-# Run preflight check before any imports
-system_preflight_check()
 
 from main.app import *
 

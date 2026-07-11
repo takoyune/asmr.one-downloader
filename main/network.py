@@ -37,9 +37,17 @@ class NetworkKernel:
                 from aiohttp_socks import ProxyConnector
                 connector = ProxyConnector.from_url(self.config.proxy)
             elif getattr(self.config, 'dns', None):
-                import aiohttp.resolver
-                resolver = aiohttp.resolver.AsyncResolver(nameservers=[self.config.dns])
+                from aiohttp.resolver import AsyncResolver
+                resolver = AsyncResolver(nameservers=[self.config.dns])
                 connector = aiohttp.TCPConnector(resolver=resolver)
+            else:
+                # Always use ThreadedResolver (system DNS via socket API).
+                # This is critical on Windows with VPNs: aiodns (the aiohttp
+                # default) queries DNS directly and bypasses the VPN tunnel,
+                # causing timeouts. ThreadedResolver calls getaddrinfo() which
+                # respects the OS routing table and VPN adapter.
+                from aiohttp.resolver import ThreadedResolver
+                connector = aiohttp.TCPConnector(resolver=ThreadedResolver())
                 
             self.session = aiohttp.ClientSession(
                 headers=headers, 
@@ -93,13 +101,27 @@ class NetworkKernel:
         proxy = self.config.proxy if self.config.proxy and not self.config.proxy.startswith("socks") else None
         
         url_str = str(url)
-        mirrors = [self.config.mirror] + [m for m in HOSTNAME_MIRRORS if m != self.config.mirror]
         import yarl
+        cdn_url = yarl.URL(url_str)
         
+        # If the URL points to the CDN (not the API mirror), download directly.
+        # The mirror-rotation logic is only for API endpoints; CDN hostnames are
+        # different servers and should never have their host swapped.
+        api_hosts = {yarl.URL(m).host for m in HOSTNAME_MIRRORS}
+        if cdn_url.host not in api_hosts:
+            try:
+                resp = await self.session.get(cdn_url, headers=headers, proxy=proxy)
+                return resp
+            except Exception as e:
+                logging.error(f"CDN stream failed for {url_str}: {e}")
+                raise
+        
+        # For API-hosted files, try all mirrors in order
+        mirrors = [self.config.mirror] + [m for m in HOSTNAME_MIRRORS if m != self.config.mirror]
         last_exc = None
         for mirror in mirrors:
             mirror_url = yarl.URL(mirror)
-            current_url = yarl.URL(url_str).with_scheme(mirror_url.scheme).with_host(mirror_url.host)
+            current_url = cdn_url.with_scheme(mirror_url.scheme).with_host(mirror_url.host)
             if mirror_url.port:
                 current_url = current_url.with_port(mirror_url.port)
                 
@@ -126,44 +148,13 @@ class NetworkDiagnostics:
     async def test_mirrors(proxy: Optional[str], dns: Optional[str] = None) -> Optional[str]:
         """Test all mirrors concurrently and return the fastest one."""
         console.print("[cyan]Testing API mirrors...[/cyan]")
-        
-        async def ping(mirror: str, session: aiohttp.ClientSession) -> Tuple[str, float]:
-            start = time.time()
-            try:
-                url = f"{mirror}/api/tracks/01568205"
-                p = proxy if proxy and not proxy.startswith("socks") else None
-                async with session.get(url, proxy=p, timeout=5) as resp:
-                    resp.raise_for_status()
-                    return mirror, time.time() - start
-            except Exception:
-                return mirror, float('inf')
-
-        connector = None
-        if proxy and proxy.startswith("socks"):
-            from aiohttp_socks import ProxyConnector
-            connector = ProxyConnector.from_url(proxy)
-        elif dns:
-            import aiohttp.resolver
-            resolver = aiohttp.resolver.AsyncResolver(nameservers=[dns])
-            connector = aiohttp.TCPConnector(resolver=resolver)
-            
-        headers = {
-            "User-Agent": random.choice(USER_AGENTS),
-            "Referer": "https://asmr.one/",
-            "Origin": "https://asmr.one"
-        }
-        async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
-            tasks = [ping(m, session) for m in HOSTNAME_MIRRORS]
-            results = await asyncio.gather(*tasks)
-            
-        valid = [(m, t) for m, t in results if t != float('inf')]
+        results = await NetworkDiagnostics.get_all_latencies(proxy, dns)
+        valid = [r for r in results if r[1] != float('inf')]
         if not valid:
             return None
-            
-        valid.sort(key=lambda x: x[1])
-        fastest = valid[0][0]
-        console.print(f"[green]Selected fastest mirror: {fastest} ({valid[0][1]*1000:.0f}ms)[/green]")
-        return fastest
+        fastest = valid[0]
+        console.print(f"[green]Selected fastest mirror: {fastest[0]} ({fastest[1]*1000:.0f}ms)[/green]")
+        return fastest[0]
 
     @staticmethod
     async def get_uptimerobot_status(mirror: str, session: aiohttp.ClientSession) -> Optional[str]:
@@ -223,9 +214,12 @@ class NetworkDiagnostics:
             from aiohttp_socks import ProxyConnector
             connector = ProxyConnector.from_url(proxy)
         elif dns:
-            import aiohttp.resolver
-            resolver = aiohttp.resolver.AsyncResolver(nameservers=[dns])
+            from aiohttp.resolver import AsyncResolver
+            resolver = AsyncResolver(nameservers=[dns])
             connector = aiohttp.TCPConnector(resolver=resolver)
+        else:
+            from aiohttp.resolver import ThreadedResolver
+            connector = aiohttp.TCPConnector(resolver=ThreadedResolver())
             
         headers = {
             "User-Agent": random.choice(USER_AGENTS),

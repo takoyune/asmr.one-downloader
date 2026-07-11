@@ -7,6 +7,7 @@ import random
 import importlib.util
 import platform
 import subprocess
+import json
 from pathlib import Path
 from datetime import datetime
 from typing import List
@@ -31,7 +32,7 @@ from main.config import ConfigManager
 from main.db import LibraryVault
 from main.network import NetworkKernel, NetworkDiagnostics
 from main.orchestrator import Orchestrator
-
+from main.progress import RichProgressReporter
 
 class Mainframe:
     """Main application controller."""
@@ -120,9 +121,16 @@ class Mainframe:
                     
                     status = ""
                     try:
-                        sz = item.save_path.stat().st_size if item.save_path.exists() else 0
-                        tmp_path = Path(str(item.save_path) + ".tmp")
-                        tmp_sz = tmp_path.stat().st_size if tmp_path.exists() else 0
+                        try:
+                            sz = item.save_path.stat().st_size
+                        except FileNotFoundError:
+                            sz = 0
+                            
+                        try:
+                            tmp_sz = item.save_path.with_name(item.save_path.name + ".tmp").stat().st_size
+                        except FileNotFoundError:
+                            tmp_sz = 0
+                            
                         if sz == item.size:
                             status = "[green]✅[/green] "
                         elif tmp_sz > 0:
@@ -229,7 +237,6 @@ class Mainframe:
         targets = None
         if selection_file.exists():
             try:
-                import json
                 with open(selection_file, 'r', encoding='utf-8') as f:
                     saved_paths = set(json.load(f))
                     
@@ -273,7 +280,6 @@ class Mainframe:
                 if targets:
                     try:
                         selection_file.parent.mkdir(parents=True, exist_ok=True)
-                        import json
                         rel_paths = [str(t.save_path.relative_to(root_path).as_posix()) for t in targets]
                         with open(selection_file, 'w', encoding='utf-8') as f:
                             json.dump(rel_paths, f)
@@ -320,13 +326,18 @@ class Mainframe:
             TimeRemainingColumn()
         )
         
+        def get_curr_size(t: TrackItem) -> int:
+            try:
+                return t.save_path.stat().st_size
+            except FileNotFoundError:
+                pass
+            try:
+                return t.save_path.with_name(t.save_path.name + ".tmp").stat().st_size
+            except FileNotFoundError:
+                return 0
+
         total_bytes = sum(t.size for t in targets)
-        curr_bytes = sum(
-            t.save_path.stat().st_size if t.save_path.exists() else (
-                Path(str(t.save_path) + ".tmp").stat().st_size if Path(str(t.save_path) + ".tmp").exists() else 0
-            )
-            for t in targets 
-        )
+        curr_bytes = sum(get_curr_size(t) for t in targets)
         
         main_task = prog.add_task(
             f"Downloading RJ{rj_id}", 
@@ -347,8 +358,9 @@ class Mainframe:
             
             update_task = asyncio.create_task(updater())
             
+            reporter = RichProgressReporter(prog)
             coros = [
-                self.orc.download_file(t, meta, prog, main_task, cover_path) 
+                self.orc.download_file(t, meta, reporter, main_task, cover_path) 
                 for t in targets
             ]
             await asyncio.gather(*coros)
@@ -356,11 +368,13 @@ class Mainframe:
             await asyncio.sleep(1.0)
             update_task.cancel()
         
-        final_size = sum(
-            t.save_path.stat().st_size 
-            for t in targets 
-            if t.save_path.exists()
-        )
+        def get_final_size(t: TrackItem) -> int:
+            try:
+                return t.save_path.stat().st_size
+            except FileNotFoundError:
+                return 0
+                
+        final_size = sum(get_final_size(t) for t in targets)
         self.db.register(meta, final_size, root_path)
         
         self.clear()
@@ -434,11 +448,7 @@ class Mainframe:
                 if inp.lower() == 'p':
                     inp = self.get_clipboard()
                 
-                codes = []
-                for match in RJ_PATTERN.finditer(inp):
-                    code = match.group("id")
-                    if code and code not in codes:
-                        codes.append(code)
+                codes = list(dict.fromkeys(m.group("id") for m in RJ_PATTERN.finditer(inp) if m.group("id")))
                 
                 if not codes:
                     console.print("[yellow]No valid RJ codes found[/yellow]")
@@ -450,10 +460,7 @@ class Mainframe:
                     work = self.db.get_work(code)
                     if work:
                         date_str = work['downloaded_at']
-                        try:
-                            date = datetime.fromisoformat(date_str).strftime('%Y-%m-%d')
-                        except (ValueError, TypeError):
-                            date = date_str[:10]
+                        date = date_str[:10]
                         if not Confirm.ask(f"[yellow]RJ{code} is already in your library (downloaded on {date}).[/yellow] Re-download anyway?"):
                             continue
                     final_codes.append(code)
@@ -475,11 +482,7 @@ class Mainframe:
                     with open(file_path, "r", encoding="utf-8") as f:
                         file_content = f.read()
                     
-                    codes = []
-                    for match in RJ_PATTERN.finditer(file_content):
-                        code = match.group("id")
-                        if code and code not in codes:
-                            codes.append(code)
+                    codes = list(dict.fromkeys(m.group("id") for m in RJ_PATTERN.finditer(file_content) if m.group("id")))
                             
                     if not codes:
                         console.print("[yellow]No valid RJ codes found in the file.[/yellow]")
@@ -491,10 +494,7 @@ class Mainframe:
                         work = self.db.get_work(code)
                         if work:
                             date_str = work['downloaded_at']
-                            try:
-                                date = datetime.fromisoformat(date_str).strftime('%Y-%m-%d')
-                            except (ValueError, TypeError):
-                                date = date_str[:10]
+                            date = date_str[:10]
                             if not Confirm.ask(f"[yellow]RJ{code} is already in your library (downloaded on {date}).[/yellow] Re-download anyway?"):
                                 continue
                         final_codes.append(code)
@@ -534,10 +534,7 @@ class Mainframe:
                     title = row['title'][:50] + "..." if len(row['title']) > 50 else row['title']
                     size = f"{row['size_bytes'] / 1024**3:.2f} GB" if row['size_bytes'] else "N/A"
                     date_str = row['downloaded_at']
-                    try:
-                        date = datetime.fromisoformat(date_str).strftime('%Y-%m-%d')
-                    except (ValueError, TypeError):
-                        date = date_str[:10]
+                    date = date_str[:10]
                     
                     table.add_row(f"RJ{rj_id}", title, size, date)
                     paths[rj_id] = row['local_path']
@@ -685,7 +682,7 @@ Timeout: {self.config.timeout}s
                 if Confirm.ask("\n[yellow]Do you want to clean up in-progress .tmp files for this download?[/yellow]", default=False):
                     cleaned = 0
                     for path in self.config.output_dir.rglob("*.tmp"):
-                        if path.is_file():
+                        if str(rj) in str(path) and path.is_file():
                             path.unlink()
                             cleaned += 1
                     console.print(f"[green]Cleaned up {cleaned} .tmp files.[/green]")
@@ -751,16 +748,13 @@ Timeout: {self.config.timeout}s
             
             if choice == "1":
                 inp = Prompt.ask("Enter RJ Codes").strip()
-                codes = [m.group("id") for m in RJ_PATTERN.finditer(inp) if m.group("id")]
+                codes = {m.group("id") for m in RJ_PATTERN.finditer(inp) if m.group("id")}
                 final_codes = []
-                for c in set(codes):
+                for c in codes:
                     work = self.db.get_work(c)
                     if work:
                         date_str = work['downloaded_at']
-                        try:
-                            date = datetime.fromisoformat(date_str).strftime('%Y-%m-%d')
-                        except (ValueError, TypeError):
-                            date = date_str[:10]
+                        date = date_str[:10]
                         if not Confirm.ask(f"[yellow]RJ{c} is already in your library (downloaded on {date}).[/yellow] Re-download anyway?"):
                             continue
                     final_codes.append(c)
