@@ -52,10 +52,10 @@ def main() -> None:
     import argparse
     import re
     parser = argparse.ArgumentParser(prog="./asmr", description="ASMR.ONE Downloader")
-    parser.add_argument("rj_codes", nargs="*", help="Directly download specific RJ codes (e.g. RJ123456)")
-    parser.add_argument("-b", "--batch", help="Path to a text file containing RJ codes (one per line)")
+    parser.add_argument("rj_codes", nargs="*", help="Directly download specific work codes (e.g. RJ123456 or VJ123456)")
+    parser.add_argument("-b", "--batch", help="Path to a text file containing work codes (one per line)")
     parser.add_argument("-a", "--all", action="store_true", help="Download all files automatically (bypass selection prompt)")
-    parser.add_argument("--list", action="store_true", help="Fetch and print track list for an RJ code without downloading")
+    parser.add_argument("--list", action="store_true", help="Fetch and print track list for a work code without downloading")
     parser.add_argument("--export", metavar="FILE", help="Export the library to a CSV or JSON file (e.g., ./asmr --export library.csv)")
     parser.add_argument("--test", action="store_true", help="Test all API mirrors and display detailed latency and error information")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be downloaded without actually downloading")
@@ -79,24 +79,26 @@ def main() -> None:
         
         if args.list:
             if not args.rj_codes:
-                console.print("[red]Please provide RJ codes to list (e.g., ./asmr --list RJ123456)[/red]")
+                console.print("[red]Please provide work codes to list (e.g., ./asmr --list RJ123456 or VJ123456)[/red]")
                 sys.exit(1)
             
-            async def list_rj(rj):
+            async def list_rj(work_code):
                 kernel = NetworkKernel(app.config)
                 try:
-                    meta_raw = await kernel.fetch(f"/api/workInfo/{rj}")
-                    tracks_raw = await kernel.fetch(f"/api/tracks/{rj}?v=2")
+                    meta_raw = await kernel.fetch(f"/api/workInfo/{work_code}")
+                    track_lookup_id = get_track_lookup_id(meta_raw, work_code) if meta_raw else work_code
+                    tracks_raw = await kernel.fetch(f"/api/tracks/{track_lookup_id}?v=2")
                     if not meta_raw or not tracks_raw:
-                        console.print(f"[red]Failed to fetch info for RJ{rj}[/red]")
+                        console.print(f"[red]Failed to fetch info for {work_code}[/red]")
                         return
                     
                     orc = Orchestrator(kernel, app.config, app.db)
+                    source_code = get_source_code(meta_raw, work_code)
                     
                     meta = WorkMetadata(
-                        rj_id=meta_raw.get('id', rj),
+                        rj_id=source_code,
                         title=meta_raw.get('title', 'Unknown'),
-                        circle=meta_raw.get('circle', {}).get('name', 'Unknown'),
+                        circle=get_circle_name(meta_raw),
                         cv=[v['name'] for v in meta_raw.get('vas', [])],
                         tags=[t['name'] for t in meta_raw.get('tags', [])],
                         price=meta_raw.get('price', 0),
@@ -113,9 +115,9 @@ def main() -> None:
                     await kernel.shutdown()
             
             for code in args.rj_codes:
-                match = RJ_PATTERN.search(code)
-                if match:
-                    asyncio.run(list_rj(match.group("id")))
+                work_code = normalize_work_code(code)
+                if work_code:
+                    asyncio.run(list_rj(work_code))
             sys.exit(0)
             
         if args.test:
@@ -190,19 +192,19 @@ def main() -> None:
             
             added = 0
             for code in set(codes):
-                match = RJ_PATTERN.search(code)
-                if match:
-                    rj = match.group("id")
-                    if app.db.get_work(rj):
-                        console.print(f"[yellow]Skipping RJ{rj}: Already in library.[/yellow]")
-                        continue
-                    app.db.queue_add(rj)
-                    added += 1
+                work_code = normalize_work_code(code)
+                if not work_code:
+                    continue
+                if app.db.get_work(work_code):
+                    console.print(f"[yellow]Skipping {work_code}: Already in library.[/yellow]")
+                    continue
+                app.db.queue_add(work_code)
+                added += 1
             
             if added > 0 or app.db.queue_get_pending():
                 app.process_queue()
             else:
-                console.print("[yellow]No valid or new RJ codes found to download.[/yellow]")
+                console.print("[yellow]No valid or new work codes found to download.[/yellow]")
                 
         elif args.resume:
             app.process_queue()

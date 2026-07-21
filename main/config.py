@@ -13,7 +13,7 @@ class ConfigSchema(BaseModel):
     mirror: str = Field(default=HOSTNAME_MIRRORS[0])
     tag_audio: bool = Field(default=True)
     sort_files: bool = Field(default=False)
-    dir_template: str = Field(default="RJ{rj_id} {title}")
+    dir_template: str = Field(default="{rj_id} {title}")
     timeout: int = Field(default=60, gt=0)
     dns: str = Field(default="1.1.1.1")
     bandwidth_limit_mbps: float = Field(default=0.0, ge=0.0)

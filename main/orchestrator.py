@@ -82,7 +82,7 @@ class Orchestrator:
         try:
             folder = self.config.dir_template.format(**ctx)
         except KeyError:
-            folder = f"RJ{meta.rj_id} {self.sanitize(meta.title)}"
+            folder = f"{meta.rj_id} {self.sanitize(meta.title)}"
         
         return self.config.output_dir / folder
 
@@ -182,7 +182,7 @@ class Orchestrator:
                            prog: ProgressReporter, main_task: Any, cover: Path) -> None:
         """Download a single file with individual progress tracking."""
         path = track.save_path
-        logging.debug(f"[RJ{meta.rj_id}] Starting download loop for {track.title} -> {path}")
+        logging.debug(f"[{meta.rj_id}] Starting download loop for {track.title} -> {path}")
         
         # Add an individual progress task for this specific file
         file_task = prog.add_task(f"[cyan]Downloading: {track.title[:30]}[/cyan]", total=track.size)
@@ -209,7 +209,7 @@ class Orchestrator:
                 if db_state and db_state['status'] == 'completed' and path.exists():
                     if attempt == 0:
                         self.stats.skipped += 1
-                        logging.debug(f"[RJ{meta.rj_id}] File {track.title} already completed in DB and exists on disk. Skipping.")
+                        logging.debug(f"[{meta.rj_id}] File {track.title} already completed in DB and exists on disk. Skipping.")
                     prog.update_task(main_task, advance=track.size)
                     prog.remove_task(file_task)
                     return
@@ -230,7 +230,7 @@ class Orchestrator:
 
                 headers = {"Range": f"bytes={existing_size}-"} if existing_size else {}
                 if existing_size:
-                    logging.debug(f"[RJ{meta.rj_id}] Resuming {track.title} from byte {existing_size}")
+                    logging.debug(f"[{meta.rj_id}] Resuming {track.title} from byte {existing_size}")
                 
                 async with self.sem:
                     async with await self.kernel.stream(track.url, headers) as resp:
@@ -273,7 +273,7 @@ class Orchestrator:
                     if path.exists():
                         path.unlink()
                     tmp_path.rename(path)
-                    logging.debug(f"[RJ{meta.rj_id}] Successfully downloaded {track.title}")
+                    logging.debug(f"[{meta.rj_id}] Successfully downloaded {track.title}")
                 else:
                     raise Exception(f"Temp file missing after download for {track.title}")
                 
@@ -296,4 +296,3 @@ class Orchestrator:
                     prog.remove_task(file_task)
                     return
                 await asyncio.sleep(1)
-

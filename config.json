@@ -5,7 +5,7 @@
     "mirror": "https://api.asmr-200.com",
     "tag_audio": true,
     "sort_files": false,
-    "dir_template": "RJ{rj_id} {title}",
+    "dir_template": "{rj_id} {title}",
     "timeout": 60,
     "dns": "1.1.1.1",
     "bandwidth_limit_mbps": 0.0,

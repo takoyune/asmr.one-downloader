@@ -2,6 +2,7 @@ import re
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Optional
 from rich.console import Console
 from rich.theme import Theme
 
@@ -9,11 +10,19 @@ APP_VERSION = "v1.2.07072026"
 GITHUB_REPO = "takoyune/asmr.one-downloader"
 
 APP_NAME = "ASMR.ONE DOWNLOADER"
-RJ_PATTERN = re.compile(r"(?:RJ)?(?P<id>[\d]{6,})")
+WORK_CODE_PATTERN = re.compile(r"(?P<code>(?:(?P<prefix>RJ|VJ))?(?P<id>[\d]{6,}))", re.IGNORECASE)
+RJ_PATTERN = WORK_CODE_PATTERN
 CHUNK_SIZE = 1048576  # 1MB chunks for smoother throttling and progress
 CONFIG_FILE = Path("config.json")
 DB_FILE = Path("history.db")
 LOG_FILE = Path("singularity.log")
+
+def normalize_work_code(value: str) -> Optional[str]:
+    """Return a normalized DLsite work code, preserving RJ/VJ prefixes when present."""
+    match = WORK_CODE_PATTERN.search(value)
+    if not match:
+        return None
+    return match.group("code").upper()
 
 TKINTER_AVAILABLE = False
 try:

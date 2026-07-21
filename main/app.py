@@ -22,7 +22,7 @@ from rich.layout import Layout
 from rich.live import Live
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
 
-from main.constants import APP_NAME, APP_VERSION, GITHUB_REPO, RJ_PATTERN, CONFIG_FILE, DB_FILE, TKINTER_AVAILABLE, console
+from main.constants import APP_NAME, APP_VERSION, GITHUB_REPO, RJ_PATTERN, CONFIG_FILE, DB_FILE, TKINTER_AVAILABLE, console, normalize_work_code
 if TKINTER_AVAILABLE:
     import tkinter as tk
     from tkinter import filedialog
@@ -33,6 +33,20 @@ from main.db import LibraryVault
 from main.network import NetworkKernel, NetworkDiagnostics
 from main.orchestrator import Orchestrator
 from main.progress import RichProgressReporter
+
+def get_source_code(meta_raw: dict, fallback: str) -> str:
+    """Prefer the original DLsite code, e.g. RJ01304763 or VJ01002074."""
+    return str(meta_raw.get('source_id') or fallback).upper()
+
+def get_track_lookup_id(meta_raw: dict, fallback: str) -> str:
+    """Tracks are keyed by ASMR.ONE's internal numeric work id."""
+    return str(meta_raw.get('id') or fallback)
+
+def get_circle_name(meta_raw: dict) -> str:
+    circle = meta_raw.get('circle')
+    if isinstance(circle, dict) and circle.get('name'):
+        return circle['name']
+    return meta_raw.get('name') or 'Unknown'
 
 class Mainframe:
     """Main application controller."""
@@ -89,8 +103,8 @@ class Mainframe:
         return ""
     
     def print_hierarchy(self, meta: WorkMetadata, items: List[TrackItem]) -> None:
-        """Prints the file hierarchy tree for an RJ code to the console."""
-        tree = Tree(f"📁 [bold]{meta.title}[/bold] (RJ{meta.rj_id})")
+        """Prints the file hierarchy tree for a work code to the console."""
+        tree = Tree(f"📁 [bold]{meta.title}[/bold] ({meta.rj_id})")
         
         def add_nodes(node_list: List[TrackItem], parent_tree: Tree) -> None:
             for item in node_list:
@@ -193,18 +207,22 @@ class Mainframe:
                 await self.kernel.shutdown()
 
     async def execute_job(self, rj_id: str) -> int:
-        """Execute a download job for a specific RJ code."""
-        self.orc.log_ui(f"Fetching metadata for RJ{rj_id}...")
+        """Execute a download job for a specific work code."""
+        work_code = normalize_work_code(rj_id) or rj_id
+        self.orc.log_ui(f"Fetching metadata for {work_code}...")
         
-        meta_raw = await self.kernel.fetch(f"/api/workInfo/{rj_id}")
+        meta_raw = await self.kernel.fetch(f"/api/workInfo/{work_code}")
         if not meta_raw:
-            self.orc.log_ui(f"[red]Failed to fetch metadata for RJ{rj_id}[/red]")
+            self.orc.log_ui(f"[red]Failed to fetch metadata for {work_code}[/red]")
             return 1
+
+        source_code = get_source_code(meta_raw, work_code)
+        track_lookup_id = get_track_lookup_id(meta_raw, work_code)
         
         meta = WorkMetadata(
-            rj_id=meta_raw.get('id', rj_id),
+            rj_id=source_code,
             title=meta_raw.get('title', 'Unknown'),
-            circle=meta_raw.get('circle', {}).get('name', 'Unknown'),
+            circle=get_circle_name(meta_raw),
             cv=[v['name'] for v in meta_raw.get('vas', [])],
             tags=[t['name'] for t in meta_raw.get('tags', [])],
             price=meta_raw.get('price', 0),
@@ -215,9 +233,9 @@ class Mainframe:
             cover_url=meta_raw.get('mainCoverUrl', '')
         )
         
-        tracks_raw = await self.kernel.fetch(f"/api/tracks/{rj_id}?v=2")
+        tracks_raw = await self.kernel.fetch(f"/api/tracks/{track_lookup_id}?v=2")
         if not tracks_raw:
-            self.orc.log_ui(f"[red]Failed to fetch tracks for RJ{rj_id}[/red]")
+            self.orc.log_ui(f"[red]Failed to fetch tracks for {source_code}[/red]")
             return 1
         
         root_path = self.orc.get_save_path(meta)
@@ -232,7 +250,7 @@ class Mainframe:
                 result.extend(flatten(n.children))
             return result
         
-        selection_file = Path(".cache") / f"{rj_id}.json"
+        selection_file = Path(".cache") / f"{source_code}.json"
         
         targets = None
         if selection_file.exists():
@@ -249,7 +267,7 @@ class Mainframe:
                     else:
                         self.clear()
                         self.draw_header()
-                        console.print(f"[cyan]Found {len(saved_targets)} previously selected files for RJ{rj_id}.[/cyan]")
+                        console.print(f"[cyan]Found {len(saved_targets)} previously selected files for {source_code}.[/cyan]")
                         choice = Prompt.ask("Resume previous selection? (Press 'n' to change selection)", choices=["y", "n", "Y", "N"], default="y").lower()
                         if choice == 'y':
                             targets = saved_targets
@@ -274,7 +292,7 @@ class Mainframe:
                 info.add_row(f"👥 CV: {', '.join(meta.cv) if meta.cv else 'N/A'}", "")
                 info.add_row(f"🏷️ Tags: {', '.join(meta.tags) if meta.tags else 'N/A'}", "")
                 
-                console.print(Panel(info, title=f"RJ{rj_id}", border_style="green"))
+                console.print(Panel(info, title=source_code, border_style="green"))
                 targets = self.build_tree_selector(hierarchy)
                 
                 if targets:
@@ -292,7 +310,7 @@ class Mainframe:
             
         if self.dry_run:
             total_sz = sum(t.size for t in targets)
-            console.print(f"\n[bold cyan][DRY RUN] Would download {len(targets)} files ({total_sz/1024/1024:.2f} MB) for RJ{rj_id}[/bold cyan]")
+            console.print(f"\n[bold cyan][DRY RUN] Would download {len(targets)} files ({total_sz/1024/1024:.2f} MB) for {source_code}[/bold cyan]")
             return 0
             
         self.clear()
@@ -340,7 +358,7 @@ class Mainframe:
         curr_bytes = sum(get_curr_size(t) for t in targets)
         
         main_task = prog.add_task(
-            f"Downloading RJ{rj_id}", 
+            f"Downloading {source_code}",
             total=total_bytes, 
             completed=curr_bytes
         )
@@ -421,14 +439,14 @@ class Mainframe:
             
             tips = [
                 "💡 Tip: Use 'p' in download prompt to paste from clipboard",
-                "💡 Tip: RJ codes are usually 6-8 digits long",
-                "💡 Tip: You can batch download multiple RJ codes at once",
+                "💡 Tip: Work codes are usually RJ/VJ plus 6-8 digits",
+                "💡 Tip: You can batch download multiple work codes at once",
                 "💡 Tip: Try typing 'takoyune' in the main menu...",
                 "💡 Tip: Library search supports partial titles and circles",
             ]
             console.print(f"\n{random.choice(tips)}\n")
             
-            console.print("[1] Download (RJ Codes)")
+            console.print("[1] Download (Work Codes)")
             console.print("[2] Batch Download from File")
             console.print("[3] Library Browser")
             console.print("[4] Queue Manager")
@@ -444,14 +462,14 @@ class Mainframe:
             ).lower()
             
             if choice == "1":
-                inp = Prompt.ask("Enter RJ Codes (space separated)").strip()
+                inp = Prompt.ask("Enter Work Codes (space separated)").strip()
                 if inp.lower() == 'p':
                     inp = self.get_clipboard()
                 
-                codes = list(dict.fromkeys(m.group("id") for m in RJ_PATTERN.finditer(inp) if m.group("id")))
+                codes = list(dict.fromkeys(normalize_work_code(m.group("code")) for m in RJ_PATTERN.finditer(inp) if m.group("code")))
                 
                 if not codes:
-                    console.print("[yellow]No valid RJ codes found[/yellow]")
+                    console.print("[yellow]No valid work codes found[/yellow]")
                     time.sleep(1)
                     continue
                 
@@ -461,7 +479,7 @@ class Mainframe:
                     if work:
                         date_str = work['downloaded_at']
                         date = date_str[:10]
-                        if not Confirm.ask(f"[yellow]RJ{code} is already in your library (downloaded on {date}).[/yellow] Re-download anyway?"):
+                        if not Confirm.ask(f"[yellow]{code} is already in your library (downloaded on {date}).[/yellow] Re-download anyway?"):
                             continue
                     final_codes.append(code)
                 
@@ -472,7 +490,7 @@ class Mainframe:
                 if Confirm.ask("Process queue now?"):
                     self.process_queue()            
             elif choice == "2":
-                file_path = Prompt.ask("\nEnter path to text file containing RJ codes").strip()
+                file_path = Prompt.ask("\nEnter path to text file containing work codes").strip()
                 if not os.path.isfile(file_path):
                     console.print("[red]File not found.[/red]")
                     time.sleep(1)
@@ -482,10 +500,10 @@ class Mainframe:
                     with open(file_path, "r", encoding="utf-8") as f:
                         file_content = f.read()
                     
-                    codes = list(dict.fromkeys(m.group("id") for m in RJ_PATTERN.finditer(file_content) if m.group("id")))
+                    codes = list(dict.fromkeys(normalize_work_code(m.group("code")) for m in RJ_PATTERN.finditer(file_content) if m.group("code")))
                             
                     if not codes:
-                        console.print("[yellow]No valid RJ codes found in the file.[/yellow]")
+                        console.print("[yellow]No valid work codes found in the file.[/yellow]")
                         time.sleep(1)
                         continue
                         
@@ -495,13 +513,13 @@ class Mainframe:
                         if work:
                             date_str = work['downloaded_at']
                             date = date_str[:10]
-                            if not Confirm.ask(f"[yellow]RJ{code} is already in your library (downloaded on {date}).[/yellow] Re-download anyway?"):
+                            if not Confirm.ask(f"[yellow]{code} is already in your library (downloaded on {date}).[/yellow] Re-download anyway?"):
                                 continue
                         final_codes.append(code)
 
                     for code in final_codes:
                         self.db.queue_add(code)
-                    console.print(f"[green]Successfully loaded {len(final_codes)} RJ codes into the queue.[/green]")
+                    console.print(f"[green]Successfully loaded {len(final_codes)} work codes into the queue.[/green]")
                     time.sleep(1)
                     
                     if Confirm.ask("Process queue now?"):
@@ -536,12 +554,12 @@ class Mainframe:
                     date_str = row['downloaded_at']
                     date = date_str[:10]
                     
-                    table.add_row(f"RJ{rj_id}", title, size, date)
+                    table.add_row(str(rj_id), title, size, date)
                     paths[rj_id] = row['local_path']
                 
                 console.print(table)
                 
-                selected = Prompt.ask("Enter RJ code to open folder (or Enter to continue)").strip()
+                selected = normalize_work_code(Prompt.ask("Enter work code to open folder (or Enter to continue)").strip())
                 if selected and selected in paths:
                     try:
                         path = Path(paths[selected])
@@ -677,7 +695,7 @@ Timeout: {self.config.timeout}s
                 if failed and failed > 0:
                     failed_rjs.append(rj)
             except KeyboardInterrupt:
-                console.print(f"\n[yellow]Download paused for RJ{rj}. State saved to database.[/yellow]")
+                console.print(f"\n[yellow]Download paused for {rj}. State saved to database.[/yellow]")
                 self.db.queue_update_status(rj, 'pending')
                 if Confirm.ask("\n[yellow]Do you want to clean up in-progress .tmp files for this download?[/yellow]", default=False):
                     cleaned = 0
@@ -689,8 +707,8 @@ Timeout: {self.config.timeout}s
                 time.sleep(1.5)
                 break
             except Exception as e:
-                console.print(f"\n[red]Error processing RJ{rj}: {e}[/red]")
-                logging.exception(f"Error processing RJ{rj}: {e}")
+                console.print(f"\n[red]Error processing {rj}: {e}[/red]")
+                logging.exception(f"Error processing {rj}: {e}")
                 # Remove from queue so it doesn't block future runs as a permanent 'error' row
                 self.db.queue_remove(rj)
                 failed_rjs.append(rj)
@@ -698,7 +716,7 @@ Timeout: {self.config.timeout}s
                 break
                 
         if failed_rjs:
-            if Confirm.ask(f"\n[yellow]{len(failed_rjs)} RJ codes had failed downloads. Retry them now?[/yellow]"):
+            if Confirm.ask(f"\n[yellow]{len(failed_rjs)} work codes had failed downloads. Retry them now?[/yellow]"):
                 for rj in failed_rjs:
                     self.db.queue_add(rj)
                 self.process_queue()
@@ -722,7 +740,7 @@ Timeout: {self.config.timeout}s
                 console.print("[dim]Queue is empty.[/dim]\n")
             else:
                 table = Table(show_header=True, header_style="bold blue")
-                table.add_column("RJ Code")
+                table.add_column("Work Code")
                 table.add_column("Priority")
                 table.add_column("Status")
                 table.add_column("Added")
@@ -730,7 +748,7 @@ Timeout: {self.config.timeout}s
                 for item in items:
                     status_color = "yellow" if item['status'] == 'pending' else "cyan" if item['status'] == 'active' else "red"
                     table.add_row(
-                        f"RJ{item['rj_id']}",
+                        str(item['rj_id']),
                         str(item['priority']),
                         f"[{status_color}]{item['status']}[/{status_color}]",
                         item['added_at'][:16]
@@ -747,30 +765,30 @@ Timeout: {self.config.timeout}s
             choice = Prompt.ask("\nSelect", choices=["1", "2", "3", "4", "5", "b", "B"], show_choices=False).lower()
             
             if choice == "1":
-                inp = Prompt.ask("Enter RJ Codes").strip()
-                codes = {m.group("id") for m in RJ_PATTERN.finditer(inp) if m.group("id")}
+                inp = Prompt.ask("Enter Work Codes").strip()
+                codes = {normalize_work_code(m.group("code")) for m in RJ_PATTERN.finditer(inp) if m.group("code")}
                 final_codes = []
                 for c in codes:
                     work = self.db.get_work(c)
                     if work:
                         date_str = work['downloaded_at']
                         date = date_str[:10]
-                        if not Confirm.ask(f"[yellow]RJ{c} is already in your library (downloaded on {date}).[/yellow] Re-download anyway?"):
+                        if not Confirm.ask(f"[yellow]{c} is already in your library (downloaded on {date}).[/yellow] Re-download anyway?"):
                             continue
                     final_codes.append(c)
                 for c in final_codes:
                     self.db.queue_add(c)
             elif choice == "2":
-                rj = Prompt.ask("Enter RJ Code to remove").strip()
-                match = RJ_PATTERN.search(rj)
-                if match:
-                    self.db.queue_remove(match.group("id"))
+                rj = Prompt.ask("Enter Work Code to remove").strip()
+                work_code = normalize_work_code(rj)
+                if work_code:
+                    self.db.queue_remove(work_code)
             elif choice == "3":
-                rj = Prompt.ask("Enter RJ Code").strip()
-                match = RJ_PATTERN.search(rj)
-                if match:
+                rj = Prompt.ask("Enter Work Code").strip()
+                work_code = normalize_work_code(rj)
+                if work_code:
                     pri = IntPrompt.ask("Enter priority (higher is downloaded first)", default=1)
-                    self.db.queue_update_priority(match.group("id"), pri)
+                    self.db.queue_update_priority(work_code, pri)
             elif choice == "4":
                 self.process_queue()
             elif choice == "5":
