@@ -17,6 +17,7 @@ class ConfigSchema(BaseModel):
     timeout: int = Field(default=60, gt=0)
     dns: str = Field(default="1.1.1.1")
     bandwidth_limit_mbps: float = Field(default=0.0, ge=0.0)
+    create_playlist: bool = Field(default=True)
     format_priority: List[str] = Field(default_factory=lambda: ["flac", "wav", "mp3", "m4a", "ogg"])
     last_update_check: float = Field(default=0.0)
 
@@ -35,6 +36,7 @@ class ConfigManager:
         self.timeout = data.timeout
         self.dns = data.dns
         self.bandwidth_limit_mbps = data.bandwidth_limit_mbps
+        self.create_playlist = getattr(data, 'create_playlist', True)
         self.format_priority = data.format_priority
         self.last_update_check = data.last_update_check
 
@@ -76,6 +78,7 @@ class ConfigManager:
             "timeout": self.timeout,
             "dns": self.dns,
             "bandwidth_limit_mbps": self.bandwidth_limit_mbps,
+            "create_playlist": self.create_playlist,
             "format_priority": self.format_priority,
             "last_update_check": self.last_update_check
         }

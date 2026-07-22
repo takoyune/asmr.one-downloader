@@ -9,6 +9,7 @@
     "timeout": 60,
     "dns": "1.1.1.1",
     "bandwidth_limit_mbps": 0.0,
+    "create_playlist": true,
     "format_priority": [
         "wav",
         "flac",

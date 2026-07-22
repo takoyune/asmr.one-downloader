@@ -54,8 +54,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="./asmr", description="ASMR.ONE Downloader")
     parser.add_argument("rj_codes", nargs="*", help="Directly download specific work codes (e.g. RJ123456 or VJ123456)")
     parser.add_argument("-b", "--batch", help="Path to a text file containing work codes (one per line)")
+    parser.add_argument("-s", "--search", metavar="KEYWORD", help="Search ASMR.ONE online for works matching keyword")
+    parser.add_argument("-o", "--output", metavar="DIR", help="Override output directory for downloads")
+    parser.add_argument("--proxy", metavar="URL", help="Specify HTTP or SOCKS5 proxy URL (e.g., http://127.0.0.1:1080)")
     parser.add_argument("-a", "--all", action="store_true", help="Download all files automatically (bypass selection prompt)")
     parser.add_argument("--list", action="store_true", help="Fetch and print track list for a work code without downloading")
+    parser.add_argument("--no-playlist", action="store_true", help="Disable automatic .m3u playlist generation")
     parser.add_argument("--export", metavar="FILE", help="Export the library to a CSV or JSON file (e.g., ./asmr --export library.csv)")
     parser.add_argument("--test", action="store_true", help="Test all API mirrors and display detailed latency and error information")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be downloaded without actually downloading")
@@ -73,9 +77,23 @@ def main() -> None:
         app.auto_all = args.all
         app.dry_run = args.dry_run
         
+        if args.output:
+            from pathlib import Path
+            app.config.output_dir = Path(args.output)
+            
+        if args.proxy:
+            app.config.proxy = args.proxy
+
+        if args.no_playlist:
+            app.config.create_playlist = False
+            
         if getattr(app.config, 'dns', None) == "auto":
             fastest_dns = asyncio.run(NetworkDiagnostics.scan_best_dns(app.config.proxy))
             app.config.dns = fastest_dns or ""
+            
+        if args.search:
+            app.search_online_works(args.search)
+            sys.exit(0)
         
         if args.list:
             if not args.rj_codes:

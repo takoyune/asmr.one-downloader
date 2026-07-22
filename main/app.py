@@ -394,6 +394,7 @@ class Mainframe:
                 
         final_size = sum(get_final_size(t) for t in targets)
         self.db.register(meta, final_size, root_path)
+        self.orc.generate_m3u_playlist(root_path, meta)
         
         self.clear()
         self.draw_header()
@@ -430,6 +431,69 @@ class Mainframe:
         
         Prompt.ask("[dim]Press Enter to continue...[/dim]", default="")
 
+    def search_online_works(self, keyword: str) -> None:
+        """Search ASMR.ONE online catalog for works by keyword and prompt to queue them."""
+        import urllib.parse
+        async def do_search():
+            kernel = self.kernel or NetworkKernel(self.config)
+            encoded = urllib.parse.quote(keyword)
+            url = f"/api/works?keyword={encoded}&page=1&subtitle=0"
+            try:
+                res = await kernel.fetch(url)
+                if not res or 'works' not in res or not res['works']:
+                    return []
+                return res['works']
+            finally:
+                if not self.kernel:
+                    await kernel.shutdown()
+            
+        works = asyncio.run(do_search())
+        if not works:
+            console.print(f"[yellow]No works found on ASMR.ONE for query: '{keyword}'[/yellow]")
+            Prompt.ask("\n[dim]Press Enter to continue...[/dim]", default="")
+            return
+
+        table = Table(show_header=True, header_style="bold cyan", title=f"Search Results for '{keyword}'")
+        table.add_column("#", justify="right")
+        table.add_column("Work Code", style="yellow")
+        table.add_column("Title")
+        table.add_column("Circle", style="green")
+        table.add_column("CV", style="magenta")
+        table.add_column("Rating", justify="right")
+
+        work_map = {}
+        for idx, item in enumerate(works[:15], 1):
+            code = str(item.get('source_id') or item.get('id') or '').upper()
+            if not code.startswith(('RJ', 'VJ', 'BJ')):
+                code = f"RJ{code}"
+            title = item.get('title', 'Unknown')[:35]
+            circle = get_circle_name(item)
+            cvs = ", ".join([v['name'] for v in item.get('vas', [])]) or "N/A"
+            rating = f"★ {item.get('rate_average_2dp', 0.0):.2f}"
+            table.add_row(str(idx), code, title, circle, cvs[:20], rating)
+            work_map[str(idx)] = code
+            work_map[code.lower()] = code
+
+        console.print(table)
+        inp = Prompt.ask("\nEnter numbers to download (e.g. 1 3, or 'all', or Enter to cancel)").strip().lower()
+        if not inp:
+            return
+
+        selected_codes = []
+        if inp == 'all':
+            selected_codes = list(work_map.values())
+        else:
+            for token in inp.split():
+                if token in work_map:
+                    selected_codes.append(work_map[token])
+
+        if selected_codes:
+            for code in list(dict.fromkeys(selected_codes)):
+                self.db.queue_add(code)
+            console.print(f"[green]Added {len(selected_codes)} work(s) to the queue![/green]")
+            time.sleep(1)
+            if Confirm.ask("Process queue now?"):
+                self.process_queue()
     
     def menu_loop(self) -> None:
         """Main menu loop."""
@@ -440,28 +504,34 @@ class Mainframe:
             tips = [
                 "💡 Tip: Use 'p' in download prompt to paste from clipboard",
                 "💡 Tip: Work codes are usually RJ/VJ plus 6-8 digits",
+                "💡 Tip: Try option [S] to search ASMR.ONE by keyword!",
                 "💡 Tip: You can batch download multiple work codes at once",
-                "💡 Tip: Try typing 'takoyune' in the main menu...",
                 "💡 Tip: Library search supports partial titles and circles",
             ]
             console.print(f"\n{random.choice(tips)}\n")
             
             console.print("[1] Download (Work Codes)")
             console.print("[2] Batch Download from File")
-            console.print("[3] Library Browser")
-            console.print("[4] Queue Manager")
-            console.print("[5] Settings")
-            console.print("[6] Statistics Dashboard")
-            console.print("[7] System Utilities")
+            console.print("[3] Search ASMR.ONE Online")
+            console.print("[4] Library Browser")
+            console.print("[5] Queue Manager")
+            console.print("[6] Settings")
+            console.print("[7] Statistics Dashboard")
+            console.print("[8] System Utilities")
             console.print("[red][X] Exit[/red]")
             
             choice = Prompt.ask(
                 "\nSelect", 
-                choices=["1", "2", "3", "4", "5", "6", "7", "x", "X"], 
+                choices=["1", "2", "3", "4", "5", "6", "7", "8", "s", "S", "x", "X"], 
                 show_choices=False
             ).lower()
             
-            if choice == "1":
+            if choice == "3" or choice == "s":
+                query = Prompt.ask("\nEnter search keyword (title, CV, circle, etc.)").strip()
+                if query:
+                    self.search_online_works(query)
+                continue
+            elif choice == "1":
                 inp = Prompt.ask("Enter Work Codes (space separated)").strip()
                 if inp.lower() == 'p':
                     inp = self.get_clipboard()
@@ -528,7 +598,7 @@ class Mainframe:
                     console.print(f"[red]Failed to read file: {e}[/red]")
                     time.sleep(1.5)
                     
-            elif choice == "3":
+            elif choice == "4":
                 self.clear()
                 self.draw_header()
                 
@@ -578,6 +648,9 @@ class Mainframe:
                 time.sleep(0.5)
             
             elif choice == "5":
+                self.queue_manager_loop()
+                
+            elif choice == "6":
                 settings_info = f"""
 Directory: {self.config.output_dir}
 Concurrent Downloads: {self.config.max_concurrent}
@@ -586,6 +659,7 @@ Proxy: {self.config.proxy or 'None'}
 Mirror: {self.config.mirror}
 Audio Tagging: {'Enabled' if self.config.tag_audio else 'Disabled'}
 Auto-Sort: {'Enabled' if self.config.sort_files else 'Disabled'}
+Create .M3U Playlist: {'Enabled' if getattr(self.config, 'create_playlist', True) else 'Disabled'}
 Timeout: {self.config.timeout}s
                 """.strip()
                 
@@ -611,6 +685,9 @@ Timeout: {self.config.timeout}s
                     
                     if Confirm.ask(f"Toggle auto-sort (currently: {self.config.sort_files})?"):
                         self.config.sort_files = not self.config.sort_files
+
+                    if Confirm.ask(f"Toggle .M3U Playlist generation (currently: {getattr(self.config, 'create_playlist', True)})?"):
+                        self.config.create_playlist = not getattr(self.config, 'create_playlist', True)
                     
                     if Confirm.ask(f"Change concurrent downloads (currently: {self.config.max_concurrent})?"):
                         new_max = IntPrompt.ask("Number (1-10)", default=self.config.max_concurrent)
@@ -631,13 +708,11 @@ Timeout: {self.config.timeout}s
                             
                     self.config.save()
                     console.print("[green]Settings saved![/green]")
-            elif choice == "4":
-                self.queue_manager_loop()
-                
-            elif choice == "6":
+
+            elif choice == "7":
                 self.show_statistics_dashboard()
                 
-            elif choice == "7":
+            elif choice == "8":
                 self.system_utilities_loop()
             elif choice == "x":
                 console.print("\n[bold cyan]Thanks for using ASMR.ONE Downloader![/bold cyan]")

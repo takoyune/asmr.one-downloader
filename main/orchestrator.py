@@ -296,3 +296,35 @@ class Orchestrator:
                     prog.remove_task(file_task)
                     return
                 await asyncio.sleep(1)
+
+    def generate_m3u_playlist(self, root_path: Path, meta: WorkMetadata) -> None:
+        """Generate a .m3u playlist file for all downloaded audio tracks in the folder."""
+        if not getattr(self.config, 'create_playlist', True) or not root_path.exists():
+            return
+        
+        audio_exts = {'.mp3', '.flac', '.wav', '.m4a', '.ogg'}
+        audio_files = []
+        
+        for file_path in root_path.rglob('*'):
+            if file_path.is_file() and file_path.suffix.lower() in audio_exts:
+                if not file_path.name.endswith('.tmp'):
+                    try:
+                        rel_path = file_path.relative_to(root_path)
+                        audio_files.append(rel_path)
+                    except ValueError:
+                        pass
+        
+        if not audio_files:
+            return
+        
+        audio_files.sort()
+        playlist_path = root_path / "playlist.m3u"
+        
+        try:
+            with open(playlist_path, 'w', encoding='utf-8') as f:
+                f.write(f"#EXTM3U\n#EXTINF:-1,{meta.rj_id} - {meta.title}\n")
+                for rel_p in audio_files:
+                    f.write(f"{str(rel_p)}\n")
+            logging.debug(f"Generated playlist for {meta.rj_id} at {playlist_path}")
+        except Exception as e:
+            logging.warning(f"Failed to create playlist.m3u for {meta.rj_id}: {e}")
