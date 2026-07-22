@@ -40,7 +40,17 @@ def check_for_updates(config) -> None:
                 # Only save timestamp when we got a real response
                 config.last_update_check = time.time()
                 config.save()
-                if latest_version != APP_VERSION:
+                
+                clean_current = APP_VERSION.lstrip('v')
+                clean_latest = latest_version.lstrip('v')
+                has_update = False
+                try:
+                    from packaging import version
+                    has_update = version.parse(clean_latest) > version.parse(clean_current)
+                except Exception:
+                    has_update = (clean_latest != clean_current)
+
+                if has_update:
                     console.print(f"\n[bold yellow]⚠ UPDATE AVAILABLE: {latest_version} (Current: {APP_VERSION})[/bold yellow]")
                     console.print(f"[cyan]Download at: https://github.com/{GITHUB_REPO}/releases/latest[/cyan]\n")
                     time.sleep(2)
@@ -82,7 +92,8 @@ def main() -> None:
         has_update, latest_ver, notes, zip_url = updater.check_for_updates()
         if has_update:
             console.print(f"[bold green]New update found: {latest_ver} (Current: {APP_VERSION})[/bold green]")
-            console.print(f"[dim]{notes[:300]}...[/dim]\n")
+            preview_notes = notes[:300] + ('...' if len(notes) > 300 else '')
+            console.print(f"[dim]{preview_notes}[/dim]\n")
             if Confirm.ask("Do you want to update now?"):
                 updater.perform_self_update(zip_url)
         else:

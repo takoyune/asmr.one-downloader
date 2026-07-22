@@ -68,22 +68,27 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
 ]
 
-# Configure logging with RotatingFileHandler (max 5MB, keep 3 backups)
-log_handler = RotatingFileHandler(
-    LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3
-)
-log_formatter = logging.Formatter(
-    fmt='%(asctime)s | %(levelname)s | [%(name)s] %(message)s', 
-    datefmt='%H:%M:%S'
-)
-log_handler.setFormatter(log_formatter)
+def init_logging() -> None:
+    """Configure application logging with RotatingFileHandler safely."""
+    try:
+        log_handler = RotatingFileHandler(
+            LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3, encoding='utf-8'
+        )
+        log_formatter = logging.Formatter(
+            fmt='%(asctime)s | %(levelname)s | [%(name)s] %(message)s', 
+            datefmt='%H:%M:%S'
+        )
+        log_handler.setFormatter(log_formatter)
 
-root_logger = logging.getLogger()
-root_logger.setLevel(logging.INFO)
-# Remove existing handlers if any (useful during hot reloads or multiple imports)
-for h in root_logger.handlers[:]:
-    root_logger.removeHandler(h)
-root_logger.addHandler(log_handler)
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.INFO)
+        for h in root_logger.handlers[:]:
+            root_logger.removeHandler(h)
+        root_logger.addHandler(log_handler)
+    except Exception:
+        pass
+
+init_logging()
 
 # Create console with theme
 theme = Theme({

@@ -36,7 +36,7 @@ class AudioProcessor:
         """Tag MP3 file with metadata."""
         try:
             tags = EasyID3(str(path))
-        except mutagen.id3.ID3NoHeaderError:
+        except (mutagen.id3.ID3NoHeaderError, mutagen.MutagenError):
             tags = EasyID3()
         
         tags['title'] = path.stem
@@ -67,31 +67,37 @@ class AudioProcessor:
         try:
             tags = OggVorbis(str(path))
         except mutagen.MutagenError:
-            tags = OggVorbis()
+            return
         
         tags['title'] = path.stem
         tags['artist'] = ", ".join(meta.cv) if meta.cv else "Unknown"
         tags['album'] = meta.title
         tags['organization'] = meta.circle
-        tags.save(str(path))  # always pass path explicitly to avoid ValueError
+        tags.save(str(path))
 
     @staticmethod
     def _tag_flac(path: Path, meta: WorkMetadata, cover: Optional[Path]) -> None:
         """Tag FLAC file with metadata."""
-        audio = FLAC(str(path))
-        audio['title'] = path.stem
-        audio['artist'] = ", ".join(meta.cv) if meta.cv else "Unknown"
-        audio['album'] = meta.title
-        audio['organization'] = meta.circle
-        
-        if cover and cover.exists():
-            mime = mimetypes.guess_type(str(cover))[0] or 'image/jpeg'
-            picture = Picture()
-            picture.type = 3
-            picture.mime = mime
-            with open(cover, 'rb') as c:
-                picture.data = c.read()
-            audio.clear_pictures()
-            audio.add_picture(picture)
-        
-        audio.save()
+        try:
+            audio = FLAC(str(path))
+            audio['title'] = path.stem
+            audio['artist'] = ", ".join(meta.cv) if meta.cv else "Unknown"
+            audio['album'] = meta.title
+            audio['organization'] = meta.circle
+            
+            if cover and cover.exists():
+                try:
+                    mime = mimetypes.guess_type(str(cover))[0] or 'image/jpeg'
+                    picture = Picture()
+                    picture.type = 3
+                    picture.mime = mime
+                    with open(cover, 'rb') as c:
+                        picture.data = c.read()
+                    audio.clear_pictures()
+                    audio.add_picture(picture)
+                except Exception as e:
+                    logging.debug(f"Failed to attach cover to FLAC {path}: {e}")
+            
+            audio.save()
+        except Exception as e:
+            logging.warning(f"Failed FLAC tagging for {path}: {e}")

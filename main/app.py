@@ -90,7 +90,7 @@ class Mainframe:
         ))
     
     def get_clipboard(self) -> str:
-        """Get text from clipboard."""
+        """Get text from clipboard safely across environments."""
         if TKINTER_AVAILABLE:
             try:
                 root = tk.Tk()
@@ -98,8 +98,8 @@ class Mainframe:
                 content = root.clipboard_get()
                 root.destroy()
                 return content
-            except (tk.TclError, AttributeError):
-                pass
+            except Exception as e:
+                logging.debug(f"Clipboard access unavailable: {e}")
         return ""
     
     def print_hierarchy(self, meta: WorkMetadata, items: List[TrackItem]) -> None:
@@ -316,15 +316,17 @@ class Mainframe:
         self.clear()
         self.draw_header()
         
-        cover_path = root_path / "cover.jpg"
+        cover_path = None
         if meta.cover_url:
             root_path.mkdir(parents=True, exist_ok=True)
+            target_cover = root_path / "cover.jpg"
             try:
                 async with await self.kernel.stream(meta.cover_url) as resp:
                     if resp.status == 200:
                         data = await resp.read()
-                        with open(cover_path, 'wb') as f:
+                        with open(target_cover, 'wb') as f:
                             f.write(data)
+                        cover_path = target_cover
             except Exception:
                 cover_path = None
         
@@ -395,6 +397,11 @@ class Mainframe:
         final_size = sum(get_final_size(t) for t in targets)
         self.db.register(meta, final_size, root_path)
         self.orc.generate_m3u_playlist(root_path, meta)
+        try:
+            if selection_file.exists():
+                selection_file.unlink()
+        except Exception:
+            pass
         
         self.clear()
         self.draw_header()
@@ -435,7 +442,7 @@ class Mainframe:
         """Search ASMR.ONE online catalog for works by keyword/tag and prompt to queue them."""
         import urllib.parse
         async def do_search():
-            kernel = self.kernel or NetworkKernel(self.config)
+            kernel = NetworkKernel(self.config)
             encoded = urllib.parse.quote(keyword)
             url = f"/api/works?keyword={encoded}&page=1&subtitle=0"
             try:
@@ -444,8 +451,7 @@ class Mainframe:
                     return []
                 return res['works']
             finally:
-                if not self.kernel:
-                    await kernel.shutdown()
+                await kernel.shutdown()
             
         works = asyncio.run(do_search())
         if not works:
@@ -483,7 +489,7 @@ class Mainframe:
 
         selected_codes = []
         if inp == 'all':
-            selected_codes = list(work_map.values())
+            selected_codes = list(dict.fromkeys(work_map.values()))
         else:
             for token in inp.split():
                 if token in work_map:
@@ -796,54 +802,56 @@ Timeout: {self.config.timeout}s
 
     def process_queue(self) -> None:
         """Process all pending items in the database queue."""
-        self.clear()
-        console.print("[bold cyan]▶ Processing Download Queue...[/bold cyan]")
-        console.print("Press [yellow]Ctrl+C[/yellow] during a download to safely pause and return to menu.\n")
-        
-        failed_rjs = []
-        
         while True:
-            pending = self.db.queue_get_pending()
-            if not pending:
-                console.print("[green]Queue is empty or all downloads completed.[/green]")
-                time.sleep(1.5)
-                break
-                
-            rj = pending[0]['rj_id']
-            try:
-                self.db.queue_update_status(rj, 'active')
-                failed = asyncio.run(self._run_job_safe(rj))
-                self.db.queue_remove(rj)
-                if failed and failed > 0:
+            self.clear()
+            console.print("[bold cyan]▶ Processing Download Queue...[/bold cyan]")
+            console.print("Press [yellow]Ctrl+C[/yellow] during a download to safely pause and return to menu.\n")
+            
+            failed_rjs = []
+            
+            while True:
+                pending = self.db.queue_get_pending()
+                if not pending:
+                    console.print("[green]Queue is empty or all downloads completed.[/green]")
+                    time.sleep(1.5)
+                    break
+                    
+                rj = pending[0]['rj_id']
+                try:
+                    self.db.queue_update_status(rj, 'active')
+                    failed = asyncio.run(self._run_job_safe(rj))
+                    self.db.queue_remove(rj)
+                    if failed and failed > 0:
+                        failed_rjs.append(rj)
+                except KeyboardInterrupt:
+                    console.print(f"\n[yellow]Download paused for {rj}. State saved to database.[/yellow]")
+                    self.db.queue_update_status(rj, 'pending')
+                    if Confirm.ask("\n[yellow]Do you want to clean up in-progress .tmp files for this download?[/yellow]", default=False):
+                        cleaned = 0
+                        for path in self.config.output_dir.rglob("*.tmp"):
+                            if str(rj) in str(path) and path.is_file():
+                                path.unlink()
+                                cleaned += 1
+                        console.print(f"[green]Cleaned up {cleaned} .tmp files.[/green]")
+                    time.sleep(1.5)
+                    return
+                except Exception as e:
+                    console.print(f"\n[red]Error processing {rj}: {e}[/red]")
+                    logging.exception(f"Error processing {rj}: {e}")
+                    # Remove from queue so it doesn't block future runs as a permanent 'error' row
+                    self.db.queue_remove(rj)
                     failed_rjs.append(rj)
-            except KeyboardInterrupt:
-                console.print(f"\n[yellow]Download paused for {rj}. State saved to database.[/yellow]")
-                self.db.queue_update_status(rj, 'pending')
-                if Confirm.ask("\n[yellow]Do you want to clean up in-progress .tmp files for this download?[/yellow]", default=False):
-                    cleaned = 0
-                    for path in self.config.output_dir.rglob("*.tmp"):
-                        if str(rj) in str(path) and path.is_file():
-                            path.unlink()
-                            cleaned += 1
-                    console.print(f"[green]Cleaned up {cleaned} .tmp files.[/green]")
-                time.sleep(1.5)
-                break
-            except Exception as e:
-                console.print(f"\n[red]Error processing {rj}: {e}[/red]")
-                logging.exception(f"Error processing {rj}: {e}")
-                # Remove from queue so it doesn't block future runs as a permanent 'error' row
-                self.db.queue_remove(rj)
-                failed_rjs.append(rj)
-                time.sleep(1.5)
-                break
-                
-        if failed_rjs:
-            if Confirm.ask(f"\n[yellow]{len(failed_rjs)} work codes had failed downloads. Retry them now?[/yellow]"):
-                for rj in failed_rjs:
-                    self.db.queue_add(rj)
-                self.process_queue()
-                return
-                
+                    time.sleep(1.5)
+                    break
+                    
+            if failed_rjs:
+                if Confirm.ask(f"\n[yellow]{len(failed_rjs)} work codes had failed downloads. Retry them now?[/yellow]"):
+                    for rj in failed_rjs:
+                        self.db.queue_add(rj)
+                    continue
+            
+            break
+
         if sys.platform == 'win32':
             try:
                 import winsound
@@ -1035,7 +1043,8 @@ Timeout: {self.config.timeout}s
                         else:
                             g_status = global_status
 
-                    console.print(table)
+                    table.add_row(mirror, ms, status, g_status)
+                console.print(table)
                 Prompt.ask("\n[dim]Press Enter to continue...[/dim]")
             elif choice == "5":
                 from main.updater import GitHubUpdater
@@ -1043,7 +1052,8 @@ Timeout: {self.config.timeout}s
                 has_update, latest_ver, notes, zip_url = updater.check_for_updates()
                 if has_update:
                     console.print(f"[bold green]New version available: {latest_ver} (Current: {APP_VERSION})[/bold green]")
-                    console.print(f"[dim]{notes[:300]}...[/dim]\n")
+                    preview_notes = notes[:300] + ('...' if len(notes) > 300 else '')
+                    console.print(f"[dim]{preview_notes}[/dim]\n")
                     if Confirm.ask("Do you want to apply this update now?"):
                         updater.perform_self_update(zip_url)
                 else:

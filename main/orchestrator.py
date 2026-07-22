@@ -187,12 +187,7 @@ class Orchestrator:
         # Add an individual progress task for this specific file
         file_task = prog.add_task(f"[cyan]Downloading: {track.title[:30]}[/cyan]", total=track.size)
 
-        # Use prefix \\?\ on Windows for paths > 250 chars
-        if sys.platform == "win32" and len(str(path.absolute())) > 250:
-            path = Path("\\\\?\\" + str(path.resolve()))
-            
-        tmp_path = Path(str(path) + ".tmp")
-
+        # Ensure parent directory exists before applying Windows \\?\ long path prefix
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
         except OSError as e:
@@ -200,8 +195,13 @@ class Orchestrator:
             logging.exception(f"Failed to create directory {path.parent} for {track.title}")
             self.stats.failed += 1
             self.stats.failures.append((track.title, f"Directory error: {e}"))
-            prog.remove_task(file_task)
             return
+
+        # Use prefix \\?\ on Windows for paths > 250 chars
+        if sys.platform == "win32" and len(str(path.absolute())) > 250:
+            path = Path("\\\\?\\" + str(path.resolve()))
+            
+        tmp_path = Path(str(path) + ".tmp")
 
         for attempt in range(20):
             try:
@@ -231,6 +231,7 @@ class Orchestrator:
                 headers = {"Range": f"bytes={existing_size}-"} if existing_size else {}
                 if existing_size:
                     logging.debug(f"[{meta.rj_id}] Resuming {track.title} from byte {existing_size}")
+                    prog.update_task(file_task, completed=existing_size)
                 
                 async with self.sem:
                     async with await self.kernel.stream(track.url, headers) as resp:
@@ -322,8 +323,9 @@ class Orchestrator:
         
         try:
             with open(playlist_path, 'w', encoding='utf-8') as f:
-                f.write(f"#EXTM3U\n#EXTINF:-1,{meta.rj_id} - {meta.title}\n")
+                f.write("#EXTM3U\n")
                 for rel_p in audio_files:
+                    f.write(f"#EXTINF:-1,{rel_p.stem}\n")
                     f.write(f"{str(rel_p)}\n")
             logging.debug(f"Generated playlist for {meta.rj_id} at {playlist_path}")
         except Exception as e:

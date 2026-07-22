@@ -65,31 +65,39 @@ class GitHubUpdater:
             console.print("[cyan]Downloading update package from GitHub...[/cyan]")
             req = urllib.request.Request(zip_url, headers={"User-Agent": "Mozilla/5.0"})
             
+            import shutil
             with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_file:
                 with urllib.request.urlopen(req, timeout=30) as resp:
-                    tmp_file.write(resp.read())
+                    shutil.copyfileobj(resp, tmp_file)
                 tmp_zip_path = Path(tmp_file.name)
 
             console.print("[cyan]Extracting update files...[/cyan]")
             protected_files = {"config.json", "history.db", "singularity.log"}
             
             with zipfile.ZipFile(tmp_zip_path, 'r') as zip_ref:
-                top_folder = zip_ref.namelist()[0].split('/')[0]
+                names = zip_ref.namelist()
+                top_folder = names[0].split('/')[0] if names else ""
+                has_root_dir = bool(top_folder) and all(n.startswith(top_folder + '/') or n == top_folder for n in names)
                 
                 for member in zip_ref.infolist():
                     filename = member.filename
-                    if filename.startswith(top_folder + '/'):
-                        relative_path = filename[len(top_folder) + 1:]
-                        if not relative_path or relative_path in protected_files:
+                    if has_root_dir:
+                        if not filename.startswith(top_folder + '/'):
                             continue
+                        relative_path = filename[len(top_folder) + 1:]
+                    else:
+                        relative_path = filename
 
-                        dest_path = target_dir / relative_path
-                        if member.is_dir():
-                            dest_path.mkdir(parents=True, exist_ok=True)
-                        else:
-                            dest_path.parent.mkdir(parents=True, exist_ok=True)
-                            with zip_ref.open(member) as source, open(dest_path, "wb") as target:
-                                target.write(source.read())
+                    if not relative_path or relative_path in protected_files:
+                        continue
+
+                    dest_path = target_dir / relative_path
+                    if member.is_dir():
+                        dest_path.mkdir(parents=True, exist_ok=True)
+                    else:
+                        dest_path.parent.mkdir(parents=True, exist_ok=True)
+                        with zip_ref.open(member) as source, open(dest_path, "wb") as target:
+                            target.write(source.read())
 
             try:
                 os.remove(tmp_zip_path)

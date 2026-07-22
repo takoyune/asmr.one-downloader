@@ -10,13 +10,16 @@ from main.models import WorkMetadata
 class LibraryVault:
     """Manages download history and library database."""
     def __init__(self):
-        self.conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+        self.conn = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=30.0)
         self.conn.row_factory = sqlite3.Row
+        self._summary_cache_time = 0.0
+        self._summary_cache = (0, 0)
         self._init_schema()
 
     def _init_schema(self) -> None:
         """Initialize database schema."""
         with self.conn:
+            self.conn.execute("PRAGMA journal_mode=WAL;")
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS works (
                     rj_id TEXT PRIMARY KEY,
