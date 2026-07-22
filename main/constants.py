@@ -24,6 +24,28 @@ def normalize_work_code(value: str) -> Optional[str]:
         return None
     return match.group("code").upper()
 
+def get_localized_tag_name(tag: Any, priority_list: Optional[List[str]] = None) -> str:
+    """Extract tag name according to language priority list (e.g. ['ja-jp', 'en-us', 'zh-cn'])."""
+    if isinstance(tag, str):
+        return tag
+    if not isinstance(tag, dict):
+        return str(tag)
+    
+    if not priority_list:
+        priority_list = ["ja-jp", "en-us", "zh-cn"]
+
+    i18n = tag.get('i18n')
+    if isinstance(i18n, dict):
+        for lang in priority_list:
+            lang_clean = lang.lower().strip()
+            for key, val in i18n.items():
+                key_clean = key.lower().strip()
+                if key_clean == lang_clean or key_clean.startswith(lang_clean) or lang_clean.startswith(key_clean):
+                    if isinstance(val, dict) and val.get('name'):
+                        return val['name']
+    
+    return tag.get('name', 'Unknown')
+
 TKINTER_AVAILABLE = False
 try:
     import tkinter as tk

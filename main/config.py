@@ -18,6 +18,7 @@ class ConfigSchema(BaseModel):
     dns: str = Field(default="1.1.1.1")
     bandwidth_limit_mbps: float = Field(default=0.0, ge=0.0)
     create_playlist: bool = Field(default=True)
+    tag_language_priority: List[str] = Field(default_factory=lambda: ["ja-jp", "en-us", "zh-cn"])
     format_priority: List[str] = Field(default_factory=lambda: ["flac", "wav", "mp3", "m4a", "ogg"])
     last_update_check: float = Field(default=0.0)
 
@@ -37,6 +38,7 @@ class ConfigManager:
         self.dns = data.dns
         self.bandwidth_limit_mbps = data.bandwidth_limit_mbps
         self.create_playlist = getattr(data, 'create_playlist', True)
+        self.tag_language_priority = getattr(data, 'tag_language_priority', ["ja-jp", "en-us", "zh-cn"])
         self.format_priority = data.format_priority
         self.last_update_check = data.last_update_check
 
@@ -79,6 +81,7 @@ class ConfigManager:
             "dns": self.dns,
             "bandwidth_limit_mbps": self.bandwidth_limit_mbps,
             "create_playlist": self.create_playlist,
+            "tag_language_priority": self.tag_language_priority,
             "format_priority": self.format_priority,
             "last_update_check": self.last_update_check
         }

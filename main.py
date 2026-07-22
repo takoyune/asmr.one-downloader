@@ -134,7 +134,7 @@ def main() -> None:
                         title=meta_raw.get('title', 'Unknown'),
                         circle=get_circle_name(meta_raw),
                         cv=[v['name'] for v in meta_raw.get('vas', [])],
-                        tags=[t['name'] for t in meta_raw.get('tags', [])],
+                        tags=[get_localized_tag_name(t, getattr(app.config, 'tag_language_priority', None)) for t in meta_raw.get('tags', [])],
                         price=meta_raw.get('price', 0),
                         source_url=meta_raw.get('source_url', ''),
                         dl_count=meta_raw.get('dl_count', 0),

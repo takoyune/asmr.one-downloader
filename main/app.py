@@ -22,7 +22,7 @@ from rich.layout import Layout
 from rich.live import Live
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
 
-from main.constants import APP_NAME, APP_VERSION, GITHUB_REPO, RJ_PATTERN, CONFIG_FILE, DB_FILE, TKINTER_AVAILABLE, console, normalize_work_code
+from main.constants import APP_NAME, APP_VERSION, GITHUB_REPO, RJ_PATTERN, CONFIG_FILE, DB_FILE, TKINTER_AVAILABLE, console, normalize_work_code, get_localized_tag_name
 if TKINTER_AVAILABLE:
     import tkinter as tk
     from tkinter import filedialog
@@ -224,7 +224,7 @@ class Mainframe:
             title=meta_raw.get('title', 'Unknown'),
             circle=get_circle_name(meta_raw),
             cv=[v['name'] for v in meta_raw.get('vas', [])],
-            tags=[t['name'] for t in meta_raw.get('tags', [])],
+            tags=[get_localized_tag_name(t, getattr(self.config, 'tag_language_priority', None)) for t in meta_raw.get('tags', [])],
             price=meta_raw.get('price', 0),
             source_url=meta_raw.get('source_url', ''),
             dl_count=meta_raw.get('dl_count', 0),
@@ -470,7 +470,7 @@ class Mainframe:
             title = item.get('title', 'Unknown')[:30]
             circle = get_circle_name(item)[:15]
             cvs = ", ".join([v['name'] for v in item.get('vas', [])]) or "N/A"
-            tags = ", ".join([t['name'] for t in item.get('tags', [])]) or "N/A"
+            tags = ", ".join([get_localized_tag_name(t, getattr(self.config, 'tag_language_priority', None)) for t in item.get('tags', [])]) or "N/A"
             rating = f"★ {item.get('rate_average_2dp', 0.0):.2f}"
             table.add_row(str(idx), code, title, circle, cvs[:15], tags[:20], rating)
             work_map[str(idx)] = code
@@ -681,6 +681,7 @@ class Mainframe:
                 self.queue_manager_loop()
                 
             elif choice == "6":
+                tag_langs = ", ".join(getattr(self.config, 'tag_language_priority', ['ja-jp', 'en-us', 'zh-cn']))
                 settings_info = f"""
 Directory: {self.config.output_dir}
 Concurrent Downloads: {self.config.max_concurrent}
@@ -690,6 +691,7 @@ Mirror: {self.config.mirror}
 Audio Tagging: {'Enabled' if self.config.tag_audio else 'Disabled'}
 Auto-Sort: {'Enabled' if self.config.sort_files else 'Disabled'}
 Create .M3U Playlist: {'Enabled' if getattr(self.config, 'create_playlist', True) else 'Disabled'}
+Tag Language Priority: {tag_langs}
 Timeout: {self.config.timeout}s
                 """.strip()
                 
@@ -718,6 +720,13 @@ Timeout: {self.config.timeout}s
 
                     if Confirm.ask(f"Toggle .M3U Playlist generation (currently: {getattr(self.config, 'create_playlist', True)})?"):
                         self.config.create_playlist = not getattr(self.config, 'create_playlist', True)
+
+                    if Confirm.ask("Edit Tag Language Priority?"):
+                        console.print(f"Current Priority: {tag_langs}")
+                        console.print("Available languages: [bold cyan]ja-jp[/bold cyan] (Japanese), [bold cyan]en-us[/bold cyan] (English), [bold cyan]zh-cn[/bold cyan] (Chinese)")
+                        new_lang = Prompt.ask("Enter new order (comma separated, e.g. ja-jp, en-us, zh-cn)")
+                        if new_lang:
+                            self.config.tag_language_priority = [x.strip().lower() for x in new_lang.split(",") if x.strip()]
                     
                     if Confirm.ask(f"Change concurrent downloads (currently: {self.config.max_concurrent})?"):
                         new_max = IntPrompt.ask("Number (1-10)", default=self.config.max_concurrent)
