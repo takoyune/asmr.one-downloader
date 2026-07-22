@@ -2,7 +2,7 @@ import re
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Any
 from rich.console import Console
 from rich.theme import Theme
 
