@@ -6,7 +6,7 @@ from typing import Optional
 from rich.console import Console
 from rich.theme import Theme
 
-APP_VERSION = "v1.2.07072026"
+APP_VERSION = "v1.3.22072026"
 GITHUB_REPO = "takoyune/asmr.one-downloader"
 
 APP_NAME = "ASMR.ONE DOWNLOADER"

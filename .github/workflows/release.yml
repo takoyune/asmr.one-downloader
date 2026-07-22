@@ -1,0 +1,29 @@
+name: Create Release Archive
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-release:
+    name: Package and Publish Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create release zip archive
+        run: |
+          zip -r asmr-one-downloader-${{ github.ref_name }}.zip . -x "*.git*" "*.pyc" "*.db" "*.log" "Downloads/*" "venv/*"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: asmr-one-downloader-${{ github.ref_name }}.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

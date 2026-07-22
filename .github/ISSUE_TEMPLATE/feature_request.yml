@@ -1,0 +1,22 @@
+name: ✨ Feature Request
+description: Suggest an idea or enhancement for ASMR.ONE Downloader
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea for a new CLI flag, UI improvement, or download option?
+  - type: textarea
+    id: feature
+    attributes:
+      label: Feature Description
+      description: Describe the solution or feature you'd like to see added.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Add any context or mockups about the feature request here.
+    validations:
+      required: false

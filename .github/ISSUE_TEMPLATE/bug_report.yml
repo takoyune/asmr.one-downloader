@@ -1,0 +1,40 @@
+name: 🐛 Bug Report
+description: Create a report to help us fix errors or download issues
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please fill out the sections below.
+  - type: input
+    id: work_code
+    attributes:
+      label: Work Code (if applicable)
+      description: e.g. RJ01234567 or VJ01002074
+    validations:
+      required: false
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what happened.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Terminal Logs / Error Stack Trace
+      description: Paste any error messages or relevant lines from `singularity.log`.
+      render: text
+    validations:
+      required: false
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Windows
+        - Linux
+        - macOS
+    validations:
+      required: true

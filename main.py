@@ -67,6 +67,7 @@ def main() -> None:
     parser.add_argument("--test", action="store_true", help="Test all API mirrors and display detailed latency and error information")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be downloaded without actually downloading")
     parser.add_argument("--resume", action="store_true", help="Resume pending downloads from queue")
+    parser.add_argument("-u", "--update", action="store_true", help="Check and apply updates from GitHub")
     parser.add_argument("--no-update-check", action="store_true", help="Skip GitHub update check")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose (DEBUG) logging")
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {APP_VERSION}", help="Show version information and exit")
@@ -74,6 +75,19 @@ def main() -> None:
 
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+
+    if args.update:
+        from main.updater import GitHubUpdater
+        updater = GitHubUpdater()
+        has_update, latest_ver, notes, zip_url = updater.check_for_updates()
+        if has_update:
+            console.print(f"[bold green]New update found: {latest_ver} (Current: {APP_VERSION})[/bold green]")
+            console.print(f"[dim]{notes[:300]}...[/dim]\n")
+            if Confirm.ask("Do you want to update now?"):
+                updater.perform_self_update(zip_url)
+        else:
+            console.print(f"[green]You are running the latest version ({APP_VERSION}).[/green]")
+        sys.exit(0)
 
     try:
         app = Mainframe()

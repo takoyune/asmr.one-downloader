@@ -954,15 +954,17 @@ Timeout: {self.config.timeout}s
         """Interactive System Utilities."""
         while True:
             self.clear()
-            console.print("[bold cyan]🛠️ System Utilities[/bold cyan]\n")
+            console.print("[bold cyan]🛠️ System Utilities & GitHub Tools[/bold cyan]\n")
             
             console.print("[1] Run Preflight Diagnostic")
             console.print("[2] Database Repair & Optimize")
             console.print("[3] Cache & Temp File Cleaner")
             console.print("[4] Network Mirror Test")
+            console.print("[5] GitHub Self-Update Check")
+            console.print("[6] GitHub Release Notes & Open Issues")
             console.print("[red][B] Back[/red]")
             
-            choice = Prompt.ask("\nSelect", choices=["1", "2", "3", "4", "b", "B"], show_choices=False).lower()
+            choice = Prompt.ask("\nSelect", choices=["1", "2", "3", "4", "5", "6", "b", "B"], show_choices=False).lower()
             
             if choice == "1":
                 self.run_diagnostic()
@@ -1033,8 +1035,26 @@ Timeout: {self.config.timeout}s
                         else:
                             g_status = global_status
 
-                    table.add_row(mirror, ms, status, g_status)
-                console.print(table)
+                    console.print(table)
+                Prompt.ask("\n[dim]Press Enter to continue...[/dim]")
+            elif choice == "5":
+                from main.updater import GitHubUpdater
+                updater = GitHubUpdater()
+                has_update, latest_ver, notes, zip_url = updater.check_for_updates()
+                if has_update:
+                    console.print(f"[bold green]New version available: {latest_ver} (Current: {APP_VERSION})[/bold green]")
+                    console.print(f"[dim]{notes[:300]}...[/dim]\n")
+                    if Confirm.ask("Do you want to apply this update now?"):
+                        updater.perform_self_update(zip_url)
+                else:
+                    console.print(f"[green]You are running the latest version ({APP_VERSION}).[/green]")
+                Prompt.ask("\n[dim]Press Enter to continue...[/dim]")
+            elif choice == "6":
+                from main.github_cli import GitHubCLIHelper
+                gh_helper = GitHubCLIHelper()
+                gh_helper.display_latest_release_notes()
+                console.print("")
+                gh_helper.display_open_issues()
                 Prompt.ask("\n[dim]Press Enter to continue...[/dim]")
             elif choice == "b":
                 break
