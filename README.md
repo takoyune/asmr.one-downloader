@@ -32,7 +32,7 @@ A major quality-of-life update focused on smarter online search, tag filtering t
 - **Interactive Search Sub-Menu** — Instead of a single search box, Option `[3] Search ASMR.ONE Online` now opens a dedicated sub-menu:
   ```
   [1] General Keyword / Title Search
-  [2] Tag Search (e.g., Loli Incest 耳かき)
+  [2] Tag Search (e.g., 耳かき 睡眠 膝枕)
   [3] Voice Actor / CV Search (e.g., 本渡楓)
   [4] Circle Search
   [5] Custom Syntax Filter ($tagw:, $rate:, $duration:)
@@ -42,8 +42,8 @@ A major quality-of-life update focused on smarter online search, tag filtering t
 
 ### 🏷️ Official Website Tag Syntax
 - Tag searches now use the exact same filter format as the ASMR.ONE website: **`$tagw:TAG$`**
-- Multiple tags are supported via space separation (e.g. `Loli Incest` → `$tagw:Loli$ $tagw:Incest$`)
-- Also available as CLI flag: `./asmr --tag "Loli Incest"`
+- Multiple tags are supported via space separation (e.g. `耳かき 睡眠` → `$tagw:耳かき$ $tagw:睡眠$`)
+- Also available as CLI flag: `./asmr --tag "耳かき 睡眠"`
 
 ### 🌐 Dual Language Priority Settings
 Two separate language priority lists are now available in `config.json` and the **Settings** menu:
@@ -280,7 +280,7 @@ RJ00112233
 Opens a search sub-menu with dedicated modes:
 ```
 [1] General Keyword / Title Search
-[2] Tag Search (e.g., Loli Incest 耳かき)
+[2] Tag Search (e.g., 耳かき 睡眠 膝枕)
 [3] Voice Actor / CV Search (e.g., 本渡楓)
 [4] Circle Search
 [5] Custom Syntax Filter ($tagw:, $rate:, $duration:, etc.)
@@ -360,7 +360,6 @@ usage: ./asmr [-h] [-b FILE] [-a] [--list] [--export FILE] [--test]
 ./asmr --search "sleeping ASMR"
 
 # Search by tag using official website syntax
-./asmr --tag "Loli Incest"
 ./asmr --tag "耳かき 睡眠"
 
 # Search by Voice Actor

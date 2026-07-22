@@ -544,7 +544,7 @@ class Mainframe:
                     query = Prompt.ask("Enter keyword or title").strip()
                     if query: self.search_online_works(query)
                 elif sub_choice == "2":
-                    tag_inp = Prompt.ask("Enter tag(s) (space separated, e.g. Loli Incest 耳かき)").strip()
+                    tag_inp = Prompt.ask("Enter tag(s) (space separated, e.g. 耳かき 睡眠 膝枕)").strip()
                     if tag_inp:
                         formatted_query = " ".join(t if t.startswith("$") else f"$tagw:{t}$" for t in tag_inp.split())
                         self.search_online_works(formatted_query)
