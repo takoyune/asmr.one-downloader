@@ -99,8 +99,8 @@ def main() -> None:
             sys.exit(0)
 
         if args.tag:
-            formatted_query = " ".join(f"$tag:{t}" if not t.startswith("$") else t for t in args.tag.split())
-            app.search_online_works(formatted_query)
+            formatted_tokens = [t if t.startswith("$") else f"$tagw:{t}$" for t in args.tag.split()]
+            app.search_online_works(" ".join(formatted_tokens))
             sys.exit(0)
 
         if args.va:
