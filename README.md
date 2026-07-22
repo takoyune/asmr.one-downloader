@@ -33,18 +33,18 @@ An asynchronous, terminal-based downloader for [ASMR.ONE](https://asmr.one). Dow
 - **Mirror speed test on startup** — all configured API mirrors are pinged in parallel and the fastest is selected automatically.
 
 ### Library & Queue
-- **SQLite library** (`history.db`) tracks every completed download: RJ code, title, local path, file size, date.
+- **SQLite library** (`history.db`) tracks every completed download: Work code (RJ/VJ), title, local path, file size, date.
 - **Duplicate detection** — before anything is queued, the app checks the library. Already-owned works are skipped with a notice.
 - **Persistent queue** — the download queue lives in the database, not in memory. Interrupted sessions survive a restart. Use `--resume` to continue.
 - **Format priority deduplication** — when a work includes both WAV and MP3 versions of the same track, only the preferred format (per your `format_priority` list) is downloaded.
 
 ### CLI & UI
-- **`--list`** — print the full folder/file tree of any RJ code without downloading.
+- **`--list`** — print the full folder/file tree of any work code (RJ/VJ) without downloading.
 - **`--dry-run`** — simulate a download interactively: shows which files would be fetched and total size, writes nothing to disk.
 - **`--all`** — skip the file-selection prompt and download everything.
-- **`--batch`** — load a `.txt` file of RJ codes and queue them all.
+- **`--batch`** — load a `.txt` file of work codes (RJ/VJ) and queue them all.
 - **Session Report** — after each job: success/fail/skipped counts, elapsed time, average speed, and a per-file failure details table when errors occurred.
-- **Retry prompt** — at the end of a batch, any failed RJ codes are collected and you are offered a single-key retry.
+- **Retry prompt** — at the end of a batch, any failed work codes are collected and you are offered a single-key retry.
 - **Windows completion beep** — a system notification sound plays when the full queue finishes.
 
 ### Metadata & Organization
@@ -176,7 +176,7 @@ Launch `./asmr` with no arguments:
 ┃            by Takoyune                 ┃
 ┗━━━━━━━━━━━━━━━━━━━ 📚 Library: 3 works ━┛
 
-[1] Download (RJ Codes)
+[1] Download (Work Codes)
 [2] Batch Download from File
 [3] Library Browser
 [4] Queue Manager
@@ -186,16 +186,16 @@ Launch `./asmr` with no arguments:
 [X] Exit
 ```
 
-#### [1] Download (RJ Codes)
-Enter one or more RJ codes separated by spaces (e.g. `RJ123456 RJ654321`). The app fetches metadata, presents the full file tree, and lets you select specific files by number or range (e.g. `1 3-5 7`). Leave the selection blank to download everything.
+#### [1] Download (Work Codes)
+Enter one or more work codes separated by spaces (e.g. `RJ123456 VJ01002074`). The app fetches metadata, presents the full file tree, and lets you select specific files by number or range (e.g. `1 3-5 7`). Leave the selection blank to download everything.
 
 #### [2] Batch Download from File
-Enter the path to a `.txt` file with one RJ code per line. All codes are validated, checked against your library, and added to the queue. The queue then processes them in order.
+Enter the path to a `.txt` file with one work code (RJ or VJ) per line. All codes are validated, checked against your library, and added to the queue. The queue then processes them in order.
 
 ```
 # Example batch file (my_list.txt)
 RJ01234567
-RJ07654321
+VJ01002074
 RJ00112233
 ```
 
@@ -230,10 +230,10 @@ usage: ./asmr [-h] [-b FILE] [-a] [--list] [--export FILE] [--test]
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `rj_codes` | — | One or more RJ codes to queue and download immediately |
-| `--batch FILE` | `-b` | Path to a `.txt` file containing RJ codes, one per line |
+| `work_codes` | — | One or more work codes (RJ or VJ) to queue and download immediately |
+| `--batch FILE` | `-b` | Path to a `.txt` file containing work codes (RJ/VJ), one per line |
 | `--all` | `-a` | Skip the file-selection prompt; download all tracks |
-| `--list` | — | Print the full track tree for each RJ code and exit (no download) |
+| `--list` | — | Print the full track tree for each work code and exit (no download) |
 | `--export FILE` | — | Export the library to a CSV or JSON file (e.g., `library.csv`) |
 | `--test` | — | Test all API mirrors and display detailed latency and error information |
 | `--dry-run` | — | Show which files would be downloaded and total size; write nothing to disk |
@@ -246,17 +246,18 @@ usage: ./asmr [-h] [-b FILE] [-a] [--list] [--export FILE] [--test]
 ### CLI Examples
 
 ```bash
-# Download a single work interactively
+# Download a single work interactively (RJ or VJ)
 ./asmr RJ01234567
+./asmr VJ01002074
 
 # Download multiple works, skip file selection (get everything)
-./asmr --all RJ01234567 RJ07654321
+./asmr --all RJ01234567 VJ01002074
 
 # Check what you'd download before committing
-./asmr --dry-run RJ01234567
+./asmr --dry-run VJ01002074
 
 # Preview the file tree without downloading
-./asmr --list RJ01234567
+./asmr --list VJ01002074
 
 # Run a batch of codes from a file
 ./asmr --batch my_list.txt
@@ -289,7 +290,7 @@ usage: ./asmr [-h] [-b FILE] [-a] [--list] [--export FILE] [--test]
     "mirror": "https://api.asmr.one",
     "tag_audio": true,
     "sort_files": false,
-    "dir_template": "RJ{rj_id} {title}",
+    "dir_template": "{rj_id} {title}",
     "timeout": 60,
     "dns": "1.1.1.1",
     "bandwidth_limit_mbps": 0.0,

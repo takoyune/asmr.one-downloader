@@ -172,7 +172,18 @@ def main() -> None:
             fastest_mirror = asyncio.run(NetworkDiagnostics.test_mirrors(app.config.proxy, getattr(app.config, 'dns', None)))
             if not fastest_mirror:
                 console.print("\n[bold red][FATAL] All API mirrors are unreachable.[/bold red]")
-                console.print("[yellow]Please check your network connection or configure a proxy in config.json.[/yellow]")
+                from rich.panel import Panel
+                msg = (
+                    "[bold yellow]ASMR.ONE is actively region-blocked outside of East Asia.[/bold yellow]\n\n"
+                    "If you are outside Japan or China, you MUST use a VPN or proxy.\n"
+                    "We highly recommend using [bold cyan]Cloudflare WARP[/bold cyan] to bypass this:\n\n"
+                    "  1. Download WARP from [u cyan]https://one.one.one.one/[/u cyan]\n"
+                    "  2. Open the app settings (gear icon)\n"
+                    "  3. Select [bold white]Traffic and DNS (UDP)[/bold white] (not just DNS)\n"
+                    "  4. Connect and run this downloader again.\n\n"
+                    "[dim]Alternatively, configure a custom proxy in config.json.[/dim]"
+                )
+                console.print(Panel(msg, title="[bold red]Connection Blocked[/bold red]", border_style="red", expand=False))
                 sys.exit(1)
             app.config.mirror = fastest_mirror
             app.config.save()
@@ -215,7 +226,9 @@ def main() -> None:
         console.print("\n\n[yellow]Interrupt received. Shutting down gracefully...[/yellow]")
         sys.exit(0)
     except Exception as e:
-        console.print(f"\n[red]Fatal error: {e}[/red]")
+        from rich.panel import Panel
+        msg = f"[bold red]An unexpected crash occurred:[/bold red]\n{e}\n\n[dim]Please check singularity.log for the full traceback.[/dim]"
+        console.print(Panel(msg, title="[bold red]Application Crash[/bold red]", border_style="red", expand=False))
         logging.critical(f"Fatal error: {e}", exc_info=True)
         sys.exit(1)
 

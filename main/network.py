@@ -209,7 +209,15 @@ class NetworkDiagnostics:
         valid = [(ip, t) for ip, t in results if t != float('inf')]
         
         if not valid:
-            console.print("[red]All scanned DNS servers failed.[/red]")
+            from rich.panel import Panel
+            msg = (
+                "[bold yellow]DNS Resolution Failed[/bold yellow]\n\n"
+                "None of the configured DNS servers could reach ASMR.ONE.\n"
+                "This usually means you are actively being blocked by your ISP's firewall,\n"
+                "or your proxy connection has died.\n\n"
+                "Recommendation: Connect to [bold cyan]Cloudflare WARP[/bold cyan] and try again."
+            )
+            console.print(Panel(msg, title="[bold red]Network Error[/bold red]", border_style="red", expand=False))
             return None
             
         valid.sort(key=lambda x: x[1])
