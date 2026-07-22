@@ -10,6 +10,14 @@
     "dns": "1.1.1.1",
     "bandwidth_limit_mbps": 0.0,
     "create_playlist": true,
+    "audio_language_priority": [
+        "ja-jp",
+        "en-us",
+        "zh-cn"
+    ],
+    "tag_language_priority": [
+        "en-us"
+    ],
     "format_priority": [
         "wav",
         "flac",

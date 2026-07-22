@@ -681,6 +681,7 @@ class Mainframe:
                 self.queue_manager_loop()
                 
             elif choice == "6":
+                audio_langs = ", ".join(getattr(self.config, 'audio_language_priority', ['ja-jp', 'en-us', 'zh-cn']))
                 tag_langs = ", ".join(getattr(self.config, 'tag_language_priority', ['ja-jp', 'en-us', 'zh-cn']))
                 settings_info = f"""
 Directory: {self.config.output_dir}
@@ -691,6 +692,7 @@ Mirror: {self.config.mirror}
 Audio Tagging: {'Enabled' if self.config.tag_audio else 'Disabled'}
 Auto-Sort: {'Enabled' if self.config.sort_files else 'Disabled'}
 Create .M3U Playlist: {'Enabled' if getattr(self.config, 'create_playlist', True) else 'Disabled'}
+Audio Language Priority: {audio_langs}
 Tag Language Priority: {tag_langs}
 Timeout: {self.config.timeout}s
                 """.strip()
@@ -721,10 +723,16 @@ Timeout: {self.config.timeout}s
                     if Confirm.ask(f"Toggle .M3U Playlist generation (currently: {getattr(self.config, 'create_playlist', True)})?"):
                         self.config.create_playlist = not getattr(self.config, 'create_playlist', True)
 
+                    if Confirm.ask("Edit Audio Language Priority?"):
+                        console.print(f"Current Priority: {audio_langs}")
+                        new_audio_lang = Prompt.ask("Enter new order (comma separated, e.g. ja-jp, en-us, zh-cn)")
+                        if new_audio_lang:
+                            self.config.audio_language_priority = [x.strip().lower() for x in new_audio_lang.split(",") if x.strip()]
+
                     if Confirm.ask("Edit Tag Language Priority?"):
                         console.print(f"Current Priority: {tag_langs}")
                         console.print("Available languages: [bold cyan]ja-jp[/bold cyan] (Japanese), [bold cyan]en-us[/bold cyan] (English), [bold cyan]zh-cn[/bold cyan] (Chinese)")
-                        new_lang = Prompt.ask("Enter new order (comma separated, e.g. ja-jp, en-us, zh-cn)")
+                        new_lang = Prompt.ask("Enter new order (comma separated, e.g. en-us, ja-jp, zh-cn)")
                         if new_lang:
                             self.config.tag_language_priority = [x.strip().lower() for x in new_lang.split(",") if x.strip()]
                     
