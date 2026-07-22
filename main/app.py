@@ -432,7 +432,7 @@ class Mainframe:
         Prompt.ask("[dim]Press Enter to continue...[/dim]", default="")
 
     def search_online_works(self, keyword: str) -> None:
-        """Search ASMR.ONE online catalog for works by keyword and prompt to queue them."""
+        """Search ASMR.ONE online catalog for works by keyword/tag and prompt to queue them."""
         import urllib.parse
         async def do_search():
             kernel = self.kernel or NetworkKernel(self.config)
@@ -459,6 +459,7 @@ class Mainframe:
         table.add_column("Title")
         table.add_column("Circle", style="green")
         table.add_column("CV", style="magenta")
+        table.add_column("Tags", style="blue")
         table.add_column("Rating", justify="right")
 
         work_map = {}
@@ -466,11 +467,12 @@ class Mainframe:
             code = str(item.get('source_id') or item.get('id') or '').upper()
             if not code.startswith(('RJ', 'VJ', 'BJ')):
                 code = f"RJ{code}"
-            title = item.get('title', 'Unknown')[:35]
-            circle = get_circle_name(item)
+            title = item.get('title', 'Unknown')[:30]
+            circle = get_circle_name(item)[:15]
             cvs = ", ".join([v['name'] for v in item.get('vas', [])]) or "N/A"
+            tags = ", ".join([t['name'] for t in item.get('tags', [])]) or "N/A"
             rating = f"★ {item.get('rate_average_2dp', 0.0):.2f}"
-            table.add_row(str(idx), code, title, circle, cvs[:20], rating)
+            table.add_row(str(idx), code, title, circle, cvs[:15], tags[:20], rating)
             work_map[str(idx)] = code
             work_map[code.lower()] = code
 
@@ -504,7 +506,7 @@ class Mainframe:
             tips = [
                 "💡 Tip: Use 'p' in download prompt to paste from clipboard",
                 "💡 Tip: Work codes are usually RJ/VJ plus 6-8 digits",
-                "💡 Tip: Try option [S] to search ASMR.ONE by keyword!",
+                "💡 Tip: Try option [3] to search ASMR.ONE by tags ($tag:耳かき)!",
                 "💡 Tip: You can batch download multiple work codes at once",
                 "💡 Tip: Library search supports partial titles and circles",
             ]
@@ -512,7 +514,7 @@ class Mainframe:
             
             console.print("[1] Download (Work Codes)")
             console.print("[2] Batch Download from File")
-            console.print("[3] Search ASMR.ONE Online")
+            console.print("[3] Search ASMR.ONE Online (Tags, CV, Circle)")
             console.print("[4] Library Browser")
             console.print("[5] Queue Manager")
             console.print("[6] Settings")
@@ -527,9 +529,37 @@ class Mainframe:
             ).lower()
             
             if choice == "3" or choice == "s":
-                query = Prompt.ask("\nEnter search keyword (title, CV, circle, etc.)").strip()
-                if query:
-                    self.search_online_works(query)
+                self.clear()
+                self.draw_header()
+                console.print("[bold cyan]🔍 ASMR.ONE Online Search[/bold cyan]\n")
+                console.print("[1] General Keyword / Title Search")
+                console.print("[2] Tag Search (e.g., 耳かき, 睡眠, 膝枕)")
+                console.print("[3] Voice Actor / CV Search (e.g., 本渡楓)")
+                console.print("[4] Circle Search")
+                console.print("[5] Custom Syntax Filter ($tag:, $rate:, $duration:)")
+                console.print("[B] Back to Main Menu\n")
+                
+                sub_choice = Prompt.ask("Select search type", choices=["1", "2", "3", "4", "5", "b", "B"], show_choices=False).lower()
+                if sub_choice == "1":
+                    query = Prompt.ask("Enter keyword or title").strip()
+                    if query: self.search_online_works(query)
+                elif sub_choice == "2":
+                    tag_inp = Prompt.ask("Enter tag(s) (space separated, e.g. 耳かき 睡眠)").strip()
+                    if tag_inp:
+                        formatted_query = " ".join(f"$tag:{t}" if not t.startswith("$") else t for t in tag_inp.split())
+                        self.search_online_works(formatted_query)
+                elif sub_choice == "3":
+                    va_inp = Prompt.ask("Enter Voice Actor / CV name").strip()
+                    if va_inp:
+                        self.search_online_works(f"$va:{va_inp}")
+                elif sub_choice == "4":
+                    circle_inp = Prompt.ask("Enter Circle name").strip()
+                    if circle_inp:
+                        self.search_online_works(f"$circle:{circle_inp}")
+                elif sub_choice == "5":
+                    custom_inp = Prompt.ask("Enter search query with syntax ($tag:, $rate:, etc.)").strip()
+                    if custom_inp:
+                        self.search_online_works(custom_inp)
                 continue
             elif choice == "1":
                 inp = Prompt.ask("Enter Work Codes (space separated)").strip()

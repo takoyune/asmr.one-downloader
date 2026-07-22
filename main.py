@@ -55,6 +55,9 @@ def main() -> None:
     parser.add_argument("rj_codes", nargs="*", help="Directly download specific work codes (e.g. RJ123456 or VJ123456)")
     parser.add_argument("-b", "--batch", help="Path to a text file containing work codes (one per line)")
     parser.add_argument("-s", "--search", metavar="KEYWORD", help="Search ASMR.ONE online for works matching keyword")
+    parser.add_argument("-t", "--tag", metavar="TAG", help="Search ASMR.ONE online by tag (e.g., 耳かき)")
+    parser.add_argument("--va", metavar="NAME", help="Search ASMR.ONE online by Voice Actor name")
+    parser.add_argument("--circle", metavar="NAME", help="Search ASMR.ONE online by Circle name")
     parser.add_argument("-o", "--output", metavar="DIR", help="Override output directory for downloads")
     parser.add_argument("--proxy", metavar="URL", help="Specify HTTP or SOCKS5 proxy URL (e.g., http://127.0.0.1:1080)")
     parser.add_argument("-a", "--all", action="store_true", help="Download all files automatically (bypass selection prompt)")
@@ -93,6 +96,19 @@ def main() -> None:
             
         if args.search:
             app.search_online_works(args.search)
+            sys.exit(0)
+
+        if args.tag:
+            formatted_query = " ".join(f"$tag:{t}" if not t.startswith("$") else t for t in args.tag.split())
+            app.search_online_works(formatted_query)
+            sys.exit(0)
+
+        if args.va:
+            app.search_online_works(f"$va:{args.va}")
+            sys.exit(0)
+
+        if args.circle:
+            app.search_online_works(f"$circle:{args.circle}")
             sys.exit(0)
         
         if args.list:
